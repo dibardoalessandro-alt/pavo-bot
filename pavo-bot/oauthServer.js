@@ -57,8 +57,8 @@ class OAuthServer {
 
   start(port = process.env.PORT || 10000) {
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
-    this.server.listen(port, () => {
-      console.log(`[OAUTH & HEALTH] Pavo Verification Web Server active on port ${port}`);
+    this.server.listen(port, '0.0.0.0', () => {
+      console.log(`[OAUTH & HEALTH] Pavo Verification Web Server active on 0.0.0.0:${port}`);
     });
     return this.server;
   }

@@ -1,0 +1,16 @@
+# Render Blueprint - Pavo Discord Bot
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: pavo-bot
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false  # Must be set manually in the Render dashboard
+      - key: NODE_ENV
+        value: production

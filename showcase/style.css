@@ -1,0 +1,121 @@
+/* Custom styles for Pavo Tweak Rebuild */
+
+/* --- Custom Scrollbars --- */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* --- Base transitions --- */
+a, button, input, select, textarea {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- 3D Product Box Tilt --- */
+.product-box-wrapper {
+    perspective: 1000px;
+}
+
+.product-box-3d {
+    transform: rotateY(-18deg) rotateX(10deg);
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s ease;
+    box-shadow: 20px 20px 50px rgba(0, 0, 0, 0.7), -1px 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.product-box-wrapper:hover .product-box-3d {
+    transform: rotateY(-6deg) rotateX(3deg) scale(1.02);
+    box-shadow: 25px 25px 60px rgba(0, 102, 255, 0.15), -1px 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* --- CSS Micro-animations --- */
+.scale-in {
+    animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.slide-in {
+    animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideIn {
+    from { transform: translateY(15px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.slide-in-drawer {
+    animation: slideInDrawer 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInDrawer {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.scale-btn:hover {
+    transform: translateY(-2px);
+}
+.scale-btn:active {
+    transform: translateY(0);
+}
+
+/* Glassmorphism utility card */
+.glass-card {
+    background: rgba(15, 17, 26, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+}
+
+/* Chrome/Safari fixes for backdrop blur */
+@supports not (backdrop-filter: blur(20px)) {
+    .glass-card {
+        background: rgba(15, 17, 26, 0.9);
+    }
+}
+
+/* --- Global Form Input Overrides --- */
+input, textarea, select {
+    background-color: #0d0e12 !important;
+    color: #ffffff;
+    caret-color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+input::placeholder, textarea::placeholder {
+    color: #9CA3AF !important;
+    opacity: 1 !important; /* Firefox placeholder fix */
+}
+
+/* Chrome, Safari, Edge autofill styling overrides */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+    -webkit-text-fill-color: #ffffff !important;
+    -webkit-box-shadow: 0 0 0px 1000px #0a0a0c inset !important;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: #ffffff !important;
+}
+

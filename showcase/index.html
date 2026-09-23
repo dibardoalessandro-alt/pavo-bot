@@ -1,0 +1,2845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pavo Tweak | The Ultimate Windows Optimization Suite</title>
+    <meta name="description" content="Customize Windows, optimize performance, reduce background processes, and lower latency with Pavo Tweak, the premium Windows optimizer.">
+    <!-- Google Fonts: Inter for UI, Outfit for high-end headings -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            black: '#050505',
+                            card: '#0a0a0c',
+                            blue: '#0066FF',
+                            blueHover: '#0052cc',
+                            border: 'rgba(255, 255, 255, 0.08)',
+                            textMuted: '#8e8e93',
+                            green: '#34c759',
+                            red: '#ff3b30'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif']
+                    },
+                    backgroundImage: {
+                        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- React & ReactDOM CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Standalone CDN -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Custom style tweaks -->
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Force Input visibility globally */
+        input, textarea, select {
+            background-color: #0d0e12 !important;
+            color: #ffffff;
+            caret-color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #9CA3AF !important;
+            opacity: 1 !important;
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        textarea:-webkit-autofill,
+        textarea:-webkit-autofill:hover,
+        textarea:-webkit-autofill:focus,
+        select:-webkit-autofill,
+        select:-webkit-autofill:hover,
+        select:-webkit-autofill:focus {
+            -webkit-text-fill-color: #ffffff !important;
+            -webkit-box-shadow: 0 0 0px 1000px #0a0a0c inset !important;
+            transition: background-color 5000s ease-in-out 0s;
+            caret-color: #ffffff !important;
+        }
+    </style>
+</head>
+<body class="bg-brand-black text-white overflow-x-hidden font-sans min-h-screen">
+    <script>
+        (function() {
+            function showError(title, message) {
+                let div = document.getElementById("debug-error-banner");
+                if (!div) {
+                    div = document.createElement("div");
+                    div.id = "debug-error-banner";
+                    div.style.position = "fixed";
+                    div.style.top = "10px";
+                    div.style.left = "10px";
+                    div.style.right = "10px";
+                    div.style.background = "#ff3b30";
+                    div.style.color = "#ffffff";
+                    div.style.padding = "15px";
+                    div.style.fontFamily = "monospace";
+                    div.style.fontSize = "12px";
+                    div.style.zIndex = "999999";
+                    div.style.borderRadius = "8px";
+                    div.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+                    div.style.whiteSpace = "pre-wrap";
+                    div.style.overflowY = "auto";
+                    div.style.maxHeight = "50vh";
+                    document.body.appendChild(div);
+                }
+                div.textContent = title + "\n\n" + message;
+            }
+            const originalConsoleError = console.error;
+            console.error = function(...args) {
+                originalConsoleError.apply(console, args);
+                const errorMsg = args.map(a => typeof a === 'object' ? (a.message || JSON.stringify(a)) : String(a)).join(" ");
+                if (errorMsg.includes("Babel") || errorMsg.includes("SyntaxError") || errorMsg.includes("Failed") || errorMsg.includes("error") || errorMsg.includes("ReferenceError")) {
+                    showError("CONSOLE ERROR DETECTED", errorMsg);
+                }
+            };
+            window.onerror = function(message, source, lineno, colno, error) {
+                showError("UNCAUGHT RUNTIME EXCEPTION", message + "\nSource: " + source + "\nLine: " + lineno + ":" + colno + (error ? "\nStack: " + error.stack : ""));
+                return false;
+            };
+        })();
+    </script>
+
+    <!-- Root React Node -->
+    <div id="root"></div>
+
+    <!-- React App Script (JSX) Compiled in Browser -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================================================
+        // 1. DATA LAYERS & UTILS
+        // ==========================================================================
+        const db = {
+            get: (table) => {
+                try {
+                    return JSON.parse(localStorage.getItem(table) || "[]");
+                } catch (e) {
+                    console.error("Failed to parse localStorage table: " + table, e);
+                    return [];
+                }
+            },
+            set: (table, data) => {
+                try {
+                    localStorage.setItem(table, JSON.stringify(data));
+                } catch (e) {
+                    console.error("Failed to set localStorage table: " + table, e);
+                }
+            },
+            getCurrentUser: () => {
+                try {
+                    const u = sessionStorage.getItem("pt_current_user") || localStorage.getItem("pt_current_user");
+                    return u ? JSON.parse(u) : null;
+                } catch (e) {
+                    console.error("Failed to get current user", e);
+                    return null;
+                }
+            },
+            setCurrentUser: (user, remember = false) => {
+                try {
+                    const uStr = JSON.stringify(user);
+                    if (remember) {
+                        localStorage.setItem("pt_current_user", uStr);
+                    } else {
+                        sessionStorage.setItem("pt_current_user", uStr);
+                    }
+                } catch (e) {
+                    console.error("Failed to set current user", e);
+                }
+            },
+            clearCurrentUser: () => {
+                localStorage.removeItem("pt_current_user");
+                sessionStorage.removeItem("pt_current_user");
+            }
+        };
+
+        function hashPassword(password) {
+            let hash = 0;
+            if (password.length === 0) return hash.toString();
+            for (let i = 0; i < password.length; i++) {
+                const chr = password.charCodeAt(i);
+                hash = ((hash << 5) - hash) + chr;
+                hash |= 0;
+            }
+            return "SHA256Mock_" + Math.abs(hash).toString(16);
+        }
+
+        function generateRandomCode(length = 6) {
+            let result = '';
+            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function generate6DigitCode() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        function Icon({ name, className = "" }) {
+            const iconObj = (() => {
+                if (typeof lucide === 'undefined' || !lucide.icons) return null;
+                const camel = name.replace(/-([a-z0-9])/gi, (g) => g[1].toUpperCase());
+                if (lucide.icons[camel]) return lucide.icons[camel];
+                if (lucide.icons[name]) return lucide.icons[name];
+                const pascal = camel.charAt(0).toUpperCase() + camel.slice(1);
+                if (lucide.icons[pascal]) return lucide.icons[pascal];
+                return null;
+            })();
+
+            if (!iconObj) {
+                return <span className={className}>[Icon: {name}]</span>;
+            }
+
+            if (typeof iconObj.toSvg === 'function') {
+                const html = iconObj.toSvg({ class: className });
+                return <span className="inline-flex items-center justify-center flex-shrink-0" dangerouslySetInnerHTML={{ __html: html }} />;
+            }
+
+            if (Array.isArray(iconObj)) {
+                return (
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`inline-block flex-shrink-0 ${className}`}
+                    >
+                        {iconObj.map(([tag, attrs], idx) => {
+                            const TagName = tag;
+                            const cleanAttrs = {};
+                            Object.keys(attrs).forEach(k => {
+                                const camelKey = k.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+                                cleanAttrs[camelKey] = attrs[k];
+                            });
+                            return <TagName key={idx} {...cleanAttrs} />;
+                        })}
+                    </svg>
+                );
+            }
+
+            return <span className={className}>[Icon: {name}]</span>;
+        }
+
+        // ==========================================================================
+        // 2. MAIN APP CONTAINER
+        // ==========================================================================
+        function App() {
+            // Layout Views: 'home', 'store', 'dashboard', 'profile', 'admin', 'auth'
+            const [view, setView] = useState('home');
+            // Auth States: 'login', 'register', 'verify', 'forgot', 'reset'
+            const [authState, setAuthState] = useState('login');
+            const [user, setUser] = useState(null);
+            const [cart, setCart] = useState([]);
+            const [cartOpen, setCartOpen] = useState(false);
+            const [checkoutOpen, setCheckoutOpen] = useState(false);
+            const [unreadMail, setUnreadMail] = useState(0);
+            const [mailList, setMailList] = useState([]);
+            const [activeMail, setActiveMail] = useState(null);
+            const [mailOpen, setMailOpen] = useState(false);
+            const [verifyEmailTarget, setVerifyEmailTarget] = useState('');
+            const [verificationCodes, setVerificationCodes] = useState([]);
+            const [toasts, setToasts] = useState([]);
+            const [activeFAQ, setActiveFAQ] = useState(null);
+            const [legalModal, setLegalModal] = useState(null); // 'terms', 'privacy', 'refund'
+            const [adminUser, setAdminUser] = useState(null);
+
+            // CAPTCHA details
+            const [captcha, setCaptcha] = useState({ a: 0, b: 0, ans: 0 });
+            const [showCaptcha, setShowCaptcha] = useState(false);
+
+            useEffect(() => {
+                // Initialize database tables if empty
+                const initTable = (key, defaultData) => {
+                    if (!localStorage.getItem(key)) {
+                        localStorage.setItem(key, JSON.stringify(defaultData));
+                    }
+                };
+
+                const seedUsers = [
+                    {
+                        username: "admin",
+                        email: "admin@pavotweak.com",
+                        passwordHash: hashPassword("admin123"),
+                        role: "admin",
+                        verified: true,
+                        banned: false,
+                        createdAt: new Date().toISOString(),
+                        avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=120&auto=format&fit=crop"
+                    },
+                    {
+                        username: "john_doe",
+                        email: "user@domain.com",
+                        passwordHash: hashPassword("user123"),
+                        role: "user",
+                        verified: true,
+                        banned: false,
+                        createdAt: new Date().toISOString(),
+                        avatar: "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?q=80&w=120&auto=format&fit=crop"
+                    }
+                ];
+
+                const seedKeys = [
+                    { key: "PAVO-ABCD-EFGH-IJKL", status: "active", userEmail: null },
+                    { key: "PAVO-1234-5678-90AB", status: "used", userEmail: "user@domain.com" }
+                ];
+
+                const seedOrders = [
+                    {
+                        orderId: "ORD-9874-2391",
+                        userEmail: "user@domain.com",
+                        productName: "Pavo Tweak Lifetime",
+                        price: 8.00,
+                        date: "2026-07-10T12:00:00Z",
+                        licenseKey: "PAVO-1234-5678-90AB"
+                    }
+                ];
+
+                const defaultReleases = [
+                    {
+                        version: "1.2.0",
+                        date: "2026-07-12",
+                        notes: "Optimized CPU thread priority algorithms, enhanced TRIM performance checks, and integrated direct GPU hardware diagnostic utilities."
+                    },
+                    {
+                        version: "1.1.5",
+                        date: "2026-07-01",
+                        notes: "Added custom context menu editor toggles and resolved telemetry registry block exceptions on Windows 11 Build 22631."
+                    }
+                ];
+
+                initTable("pt_users", seedUsers);
+                initTable("pt_keys", seedKeys);
+                initTable("pt_orders", seedOrders);
+                initTable("pt_releases", defaultReleases);
+                initTable("pt_failed_logins", {});
+
+                // Set CSRF token
+                if (!sessionStorage.getItem("pt_csrf_token")) {
+                    sessionStorage.setItem("pt_csrf_token", generateRandomCode(16));
+                }
+
+                // Check active session user
+                const curr = db.getCurrentUser();
+                if (curr) {
+                    setUser(curr);
+                }
+
+                // Initialize cart state
+                setCart(db.get("pt_cart"));
+
+                // Load initial mock mail inbox if any
+                setMailList(db.get("pt_mails") || []);
+
+                const handleKeyDown = (e) => {
+                    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+                        e.preventDefault();
+                        setView('admin');
+                        window.location.hash = '#/admin';
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+
+                const handleHashChange = () => {
+                    if (window.location.hash === '#/admin') {
+                        setView('admin');
+                    } else if (window.location.hash === '#/home' || window.location.hash === '') {
+                        setView('home');
+                    }
+                };
+                window.addEventListener('hashchange', handleHashChange);
+
+                if (window.location.hash === '#/admin') {
+                    setView('admin');
+                }
+
+                return () => {
+                    window.removeEventListener('keydown', handleKeyDown);
+                    window.removeEventListener('hashchange', handleHashChange);
+                };
+            }, []);
+
+            useEffect(() => {
+                // Managed by React-friendly Icon component
+            }, [view, authState, cartOpen, checkoutOpen, mailOpen, activeMail, legalModal]);
+
+            // Unread email counter sync
+            useEffect(() => {
+                if (Array.isArray(mailList)) {
+                    const count = mailList.filter(m => m.unread).length;
+                    setUnreadMail(count);
+                }
+            }, [mailList]);
+
+            const updateUnreadCount = (list) => {
+                if (Array.isArray(list)) {
+                    const count = list.filter(m => m.unread).length;
+                    setUnreadMail(count);
+                }
+            };
+
+            const triggerToast = (title, message, type = "info") => {
+                const id = Date.now();
+                setToasts(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    return [...current, { id, title, message, type }];
+                });
+                setTimeout(() => {
+                    setToasts(prev => {
+                        const current = Array.isArray(prev) ? prev : [];
+                        return current.filter(t => t.id !== id);
+                    });
+                }, 5000);
+            };
+
+            const sendMockMail = (to, subject, bodyMarkup) => {
+                const timeStr = new Date().toLocaleTimeString();
+                const newMail = {
+                    from: "licensing@pavotweak.com",
+                    to,
+                    subject,
+                    body: bodyMarkup,
+                    time: timeStr,
+                    unread: true
+                };
+                setMailList(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    const updated = [newMail, ...current];
+                    db.set("pt_mails", updated);
+                    return updated;
+                });
+                triggerToast("New Email Received", `Instructions sent to ${to}. Open PavoMail node at the bottom right.`, "success");
+                setMailOpen(true);
+            };
+
+            const handleLogout = () => {
+                db.clearCurrentUser();
+                setUser(null);
+                setView('home');
+                triggerToast("Logged Out", "You have been securely logged out.", "info");
+            };
+
+            return (
+                <div className="relative min-h-screen pb-12 flex flex-col justify-between">
+                    {/* Mouse-following Background Particles */}
+                    <ParticleBackground />
+
+                    {/* Site Toast System */}
+                    <ToastList toasts={toasts} setToasts={setToasts} />
+
+                    {/* STICKY HEADER */}
+                    <Header 
+                        view={view} 
+                        setView={setView} 
+                        user={user} 
+                        handleLogout={handleLogout} 
+                        cartCount={cart.length} 
+                        setCartOpen={setCartOpen} 
+                        setAuthState={setAuthState}
+                    />
+
+                    {/* CENTRAL WORKSPACE */}
+                    <main className="flex-grow z-10">
+                        {view === 'home' && (
+                            <HomeView 
+                                setView={setView} 
+                                activeFAQ={activeFAQ} 
+                                setActiveFAQ={setActiveFAQ} 
+                                triggerToast={triggerToast}
+                            />
+                        )}
+                        {view === 'store' && (
+                            <StoreView 
+                                cart={cart} 
+                                setCart={setCart} 
+                                setCartOpen={setCartOpen} 
+                                triggerToast={triggerToast} 
+                            />
+                        )}
+                        {view === 'dashboard' && user && (
+                            <DashboardView 
+                                user={user} 
+                                setView={setView}
+                                triggerToast={triggerToast} 
+                            />
+                        )}
+                        {view === 'profile' && user && (
+                            <ProfileView 
+                                user={user} 
+                                setUser={setUser}
+                                triggerToast={triggerToast} 
+                            />
+                        )}
+                        {view === 'admin' && (!adminUser ? (
+                            <AdminLoginView 
+                                setAdminUser={setAdminUser} 
+                                triggerToast={triggerToast} 
+                            />
+                        ) : (
+                            <AdminView 
+                                adminUser={adminUser}
+                                setAdminUser={setAdminUser}
+                                setView={setView}
+                                triggerToast={triggerToast} 
+                            />
+                        ))}
+                        {view === 'auth' && (
+                            <AuthView 
+                                authState={authState} 
+                                setAuthState={setAuthState} 
+                                setUser={setUser} 
+                                setView={setView}
+                                triggerToast={triggerToast} 
+                                sendMockMail={sendMockMail}
+                                verifyEmailTarget={verifyEmailTarget}
+                                setVerifyEmailTarget={setVerifyEmailTarget}
+                                verificationCodes={verificationCodes}
+                                setVerificationCodes={setVerificationCodes}
+                                captcha={captcha}
+                                setCaptcha={setCaptcha}
+                                showCaptcha={showCaptcha}
+                                setShowCaptcha={setShowCaptcha}
+                                processOrderCompletion={(email) => {
+                                    // Binds license generation
+                                    let keys = db.get("pt_keys");
+                                    let orders = db.get("pt_orders");
+                                    const freshKey = "PAVO-" + generateRandomCode(4).toUpperCase() + "-" + generateRandomCode(4).toUpperCase() + "-" + generateRandomCode(4).toUpperCase();
+                                    keys.push({ key: freshKey, status: "used", userEmail: email });
+                                    db.set("pt_keys", keys);
+                                    
+                                    orders.push({
+                                        orderId: "ORD-" + Math.floor(1000 + Math.random() * 9000) + "-" + Math.floor(1000 + Math.random() * 9000),
+                                        userEmail: email,
+                                        productName: "Pavo Tweak Lifetime",
+                                        price: 8.00,
+                                        date: new Date().toISOString(),
+                                        licenseKey: freshKey
+                                    });
+                                    db.set("pt_orders", orders);
+                                    db.set("pt_cart", []);
+                                    setCart([]);
+                                    triggerToast("Order Completed!", "Your lifetime license has been processed successfully.", "success");
+                                    setView('dashboard');
+                                }}
+                            />
+                        )}
+                    </main>
+
+                    {/* FOOTER */}
+                    <Footer setView={setView} setUser={setUser} triggerToast={triggerToast} setLegalModal={setLegalModal} />
+
+                    {/* CART DRAWER */}
+                    <CartDrawer 
+                        isOpen={cartOpen} 
+                        setIsOpen={setCartOpen} 
+                        cart={cart} 
+                        setCart={setCart} 
+                        setCheckoutOpen={setCheckoutOpen} 
+                    />
+
+                    {/* CHECKOUT MODAL */}
+                    <CheckoutModal 
+                        isOpen={checkoutOpen} 
+                        setIsOpen={setCheckoutOpen} 
+                        user={user} 
+                        cart={cart} 
+                        setCart={setCart}
+                        setView={setView}
+                        setAuthState={setAuthState}
+                        setVerifyEmailTarget={setVerifyEmailTarget}
+                        sendMockMail={sendMockMail}
+                        verificationCodes={verificationCodes}
+                        setVerificationCodes={setVerificationCodes}
+                        triggerToast={triggerToast}
+                    />
+
+                    {/* FLOATING EMAIL NODE */}
+                    <EmailClient 
+                        isOpen={mailOpen} 
+                        setIsOpen={setMailOpen} 
+                        unreadCount={unreadMail} 
+                        mailList={mailList} 
+                        setMailList={setMailList} 
+                        updateUnreadCount={updateUnreadCount} 
+                        activeMail={activeMail} 
+                        setActiveMail={setActiveMail} 
+                    />
+
+                    {/* MOCK LEGAL MODAL */}
+                    <LegalModal type={legalModal} setType={setLegalModal} />
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 3. BACKGROUND CANVAS COMPONENT
+        // ==========================================================================
+        function ParticleBackground() {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext("2d");
+                let particles = [];
+                const maxParticles = 75;
+                let mouse = { x: null, y: null, radius: 160 };
+
+                const resize = () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                };
+                resize();
+                window.addEventListener("resize", resize);
+
+                const handleMouseMove = (e) => {
+                    mouse.x = e.clientX;
+                    mouse.y = e.clientY;
+                };
+                const handleMouseLeave = () => {
+                    mouse.x = null;
+                    mouse.y = null;
+                };
+                window.addEventListener("mousemove", handleMouseMove);
+                window.addEventListener("mouseleave", handleMouseLeave);
+
+                class Particle {
+                    constructor() {
+                        this.x = Math.random() * canvas.width;
+                        this.y = Math.random() * canvas.height;
+                        this.vx = (Math.random() - 0.5) * 0.5;
+                        this.vy = (Math.random() - 0.5) * 0.5;
+                        this.radius = Math.random() * 2 + 0.8;
+                    }
+                    draw() {
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = "rgba(0, 102, 255, 0.35)";
+                        ctx.fill();
+                    }
+                    update() {
+                        if (this.x < 0 || this.x > canvas.width) this.vx = -this.vx;
+                        if (this.y < 0 || this.y > canvas.height) this.vy = -this.vy;
+
+                        if (mouse.x != null && mouse.y != null) {
+                            let dx = mouse.x - this.x;
+                            let dy = mouse.y - this.y;
+                            let dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist < mouse.radius) {
+                                let force = (mouse.radius - dist) / mouse.radius;
+                                this.x -= dx / dist * force * 0.7;
+                                this.y -= dy / dist * force * 0.7;
+                            }
+                        }
+                        this.x += this.vx;
+                        this.y += this.vy;
+                    }
+                }
+
+                for (let i = 0; i < maxParticles; i++) {
+                    particles.push(new Particle());
+                }
+
+                let animationFrameId;
+                const animate = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach(p => {
+                        p.update();
+                        p.draw();
+                    });
+
+                    for (let i = 0; i < particles.length; i++) {
+                        for (let j = i + 1; j < particles.length; j++) {
+                            let dx = particles[i].x - particles[j].x;
+                            let dy = particles[i].y - particles[j].y;
+                            let dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist < 100) {
+                                let alpha = (100 - dist) / 100 * 0.12;
+                                ctx.strokeStyle = `rgba(0, 102, 255, ${alpha})`;
+                                ctx.lineWidth = 0.8;
+                                ctx.beginPath();
+                                ctx.moveTo(particles[i].x, particles[i].y);
+                                ctx.lineTo(particles[j].x, particles[j].y);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                    animationFrameId = requestAnimationFrame(animate);
+                };
+                animate();
+
+                return () => {
+                    window.removeEventListener("resize", resize);
+                    window.removeEventListener("mousemove", handleMouseMove);
+                    window.removeEventListener("mouseleave", handleMouseLeave);
+                    cancelAnimationFrame(animationFrameId);
+                };
+            }, []);
+
+            return <canvas ref={canvasRef} className="fixed top-0 left-0 w-full h-full pointer-events-none z-0" />;
+        }
+
+        // ==========================================================================
+        // 4. HEADER COMPONENT
+        // ==========================================================================
+        function Header({ view, setView, user, handleLogout, cartCount, setCartOpen, setAuthState }) {
+            const [mobileOpen, setMobileOpen] = useState(false);
+            const [dropOpen, setDropOpen] = useState(false);
+            const dropRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (dropRef.current && !dropRef.current.contains(e.target)) {
+                        setDropOpen(false);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            const triggerSectionScroll = (id) => {
+                setMobileOpen(false);
+                if (view !== 'home') {
+                    setView('home');
+                    setTimeout(() => {
+                        const el = document.getElementById(id);
+                        if (el) window.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' });
+                    }, 200);
+                } else {
+                    const el = document.getElementById(id);
+                    if (el) window.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' });
+                }
+            };
+
+            return (
+                <header className="sticky top-0 w-full border-b border-brand-border bg-brand-black/70 backdrop-blur-xl z-50 transition-colors duration-300">
+                    <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                        {/* Logo Link */}
+                        <a href="#" onClick={(e) => { e.preventDefault(); setView('home'); window.scrollTo({ top:0, behavior:'smooth' }); }} className="flex items-center gap-2.5 group">
+                            <svg viewBox="0 0 100 100" className="h-7 w-7 text-brand-blue group-hover:scale-105 transition-transform duration-300" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="30" y1="20" x2="30" y2="80" />
+                                <path d="M30 20h26c12 0 22 10 22 22s-10 22-22 22H45" />
+                            </svg>
+                            <span className="font-display font-black text-xl tracking-wider text-white">PAVO <span className="text-brand-blue">TWEAK</span></span>
+                        </a>
+
+                        {/* Navigation Menu (Desktop) */}
+                        <nav className="hidden md:flex items-center gap-8">
+                            <a href="#" onClick={(e) => { e.preventDefault(); setView('home'); window.scrollTo({ top:0, behavior:'smooth' }); }} className={`text-sm font-medium hover:text-white transition-colors duration-200 ${view === 'home' ? 'text-white' : 'text-brand-textMuted'}`}>Home</a>
+                            <a href="#features" onClick={(e) => { e.preventDefault(); triggerSectionScroll('features'); }} className="text-sm font-medium text-brand-textMuted hover:text-white transition-colors duration-200">Features</a>
+                            <a href="#store" onClick={(e) => { e.preventDefault(); setView('store'); }} className={`text-sm font-medium hover:text-white transition-colors duration-200 ${view === 'store' ? 'text-white' : 'text-brand-textMuted'}`}>Store</a>
+                            <a href="#faq" onClick={(e) => { e.preventDefault(); triggerSectionScroll('faq'); }} className="text-sm font-medium text-brand-textMuted hover:text-white transition-colors duration-200">FAQ</a>
+                            <a href="#contact" onClick={(e) => { e.preventDefault(); triggerSectionScroll('contact'); }} className="text-sm font-medium text-brand-textMuted hover:text-white transition-colors duration-200">Contact</a>
+                        </nav>
+
+                        {/* Actions Group */}
+                        <div className="flex items-center gap-4">
+                            {/* Cart Trigger */}
+                             <button onClick={() => setCartOpen(true)} className="relative p-2 text-brand-textMuted hover:text-brand-blue transition-colors duration-200 focus:outline-none">
+                                <Icon name="shopping-cart" className="w-5 h-5" />
+                                {cartCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-brand-blue text-white text-[10px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow-lg shadow-brand-blue/30 scale-in">{cartCount}</span>
+                                )}
+                             </button>
+
+                             {/* User Menu Trigger */}
+                             {user ? (
+                                 <div ref={dropRef} className="relative">
+                                     <button onClick={() => setDropOpen(!dropOpen)} className="flex items-center gap-2 p-1 bg-white/5 hover:bg-white/10 border border-brand-border rounded-full pr-3 hover:border-white/20 transition-all duration-200 focus:outline-none">
+                                         <img src={user.avatar} alt="Avatar" className="w-7 h-7 rounded-full object-cover border border-brand-blue/50" />
+                                         <span className="text-xs font-semibold text-white max-w-[90px] truncate">{user.username}</span>
+                                         <Icon name="chevron-down" className={`w-3.5 h-3.5 text-brand-textMuted transition-transform duration-200 ${dropOpen ? 'rotate-180' : ''}`} />
+                                     </button>
+                                     
+                                     {dropOpen && (
+                                         <div className="absolute right-0 mt-2 w-48 bg-brand-card/90 border border-brand-border rounded-xl shadow-2xl backdrop-blur-xl p-1.5 flex flex-col gap-1 scale-in">
+                                             <button onClick={() => { setDropOpen(false); setView('dashboard'); }} className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-textMuted hover:text-white hover:bg-white/5 rounded-lg transition-colors duration-200 text-left">
+                                                 <Icon name="grid" className="w-4 h-4" /> Dashboard
+                                             </button>
+                                             <button onClick={() => { setDropOpen(false); setView('profile'); }} className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-textMuted hover:text-white hover:bg-white/5 rounded-lg transition-colors duration-200 text-left">
+                                                 <Icon name="user" className="w-4 h-4" /> User Profile
+                                             </button>
+                                             {user.role === 'admin' && (
+                                                 <button onClick={() => { setDropOpen(false); setView('admin'); }} className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-textMuted hover:text-white hover:bg-white/5 rounded-lg transition-colors duration-200 text-left text-brand-blue">
+                                                     <Icon name="shield" className="w-4 h-4" /> Admin Panel
+                                                 </button>
+                                             )}
+                                             <hr className="border-brand-border my-1" />
+                                             <button onClick={() => { setDropOpen(false); handleLogout(); }} className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-red hover:bg-brand-red/10 rounded-lg transition-colors duration-200 text-left">
+                                                 <Icon name="log-out" className="w-4 h-4" /> Log Out
+                                             </button>
+                                         </div>
+                                     )}
+                                 </div>
+                             ) : (
+                                 <div className="hidden sm:flex items-center gap-3">
+                                     <button onClick={() => { setAuthState('login'); setView('auth'); }} className="text-sm font-semibold text-brand-textMuted hover:text-white transition-colors duration-200 px-3 py-1.5">Login</button>
+                                     <button onClick={() => { setAuthState('register'); setView('auth'); }} className="text-sm font-semibold bg-brand-blue hover:bg-brand-blueHover px-4 py-2 rounded-lg transition-all duration-300 shadow-md hover:shadow-brand-blue/30 scale-btn flex items-center">Register</button>
+                                 </div>
+                             )}
+
+                             {/* Mobile Hamburger toggle */}
+                             <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden p-2 text-brand-textMuted hover:text-white focus:outline-none">
+                                 <Icon name={mobileOpen ? "x" : "menu"} className="w-6 h-6" />
+                             </button>
+                         </div>
+                    </div>
+
+                    {/* Mobile Dropdown Menu */}
+                    {mobileOpen && (
+                        <div className="md:hidden w-full bg-brand-card/95 border-b border-brand-border p-6 flex flex-col gap-4 slide-in">
+                            <a href="#" onClick={(e) => { e.preventDefault(); setMobileOpen(false); setView('home'); }} className="text-base font-semibold text-brand-textMuted hover:text-white py-1">Home</a>
+                            <a href="#features" onClick={(e) => { e.preventDefault(); triggerSectionScroll('features'); }} className="text-base font-semibold text-brand-textMuted hover:text-white py-1">Features</a>
+                            <a href="#store" onClick={(e) => { e.preventDefault(); setMobileOpen(false); setView('store'); }} className="text-base font-semibold text-brand-textMuted hover:text-white py-1">Store</a>
+                            <a href="#faq" onClick={(e) => { e.preventDefault(); triggerSectionScroll('faq'); }} className="text-base font-semibold text-brand-textMuted hover:text-white py-1">FAQ</a>
+                            <a href="#contact" onClick={(e) => { e.preventDefault(); triggerSectionScroll('contact'); }} className="text-base font-semibold text-brand-textMuted hover:text-white py-1">Contact</a>
+                            {!user && (
+                                <div className="flex flex-col gap-3 mt-2">
+                                    <button onClick={() => { setMobileOpen(false); setAuthState('login'); setView('auth'); }} className="w-full text-center py-2.5 font-semibold text-brand-textMuted hover:text-white hover:bg-white/5 rounded-lg border border-brand-border transition-all">Login</button>
+                                    <button onClick={() => { setMobileOpen(false); setAuthState('register'); setView('auth'); }} className="w-full text-center py-2.5 font-semibold bg-brand-blue hover:bg-brand-blueHover rounded-lg transition-all shadow-md">Register</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </header>
+            );
+        }
+
+        // ==========================================================================
+        // 5. HOME (LANDING PAGE) VIEW
+        // ==========================================================================
+        function HomeView({ setView, activeFAQ, setActiveFAQ, triggerToast }) {
+            const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' });
+
+            const handleSubmitContact = (e) => {
+                e.preventDefault();
+                setContactForm({ name: '', email: '', subject: '', message: '' });
+                triggerToast("Message Dispatched", "Thank you! Our support engineers will contact you shortly.", "success");
+            };
+
+            const featureItems = [
+                { icon: "cpu", title: "Optimize Windows", desc: "Fine-tune system scheduler, disable idle telemetry daemons, and eliminate hidden performance-throttling profiles." },
+                { icon: "activity", title: "Reduce Background Processes", desc: "Instantly terminate useless OS components, bloatware, and auto-run apps to free up precious CPU cycles." },
+                { icon: "zap", title: "FPS Optimization", desc: "Direct hardware prioritization to ensure games receive maximum GPU rendering queue preference." },
+                { icon: "mouse-pointer", title: "Low Input Delay", desc: "Fine-tune registry interrupt moderation and usb polling parameters to yield instant physical reaction times." },
+                { icon: "shield-alert", title: "Privacy Improvements", desc: "Enforce complete local security by stopping background data uploads, diagnostic tracking, and user logs compiling." },
+                { icon: "rocket", title: "Startup Optimization", desc: "Audit and delay non-essential startup registries to slash boot time sequences and reach desktops faster." },
+                { icon: "sliders", title: "Windows Customization", desc: "Rebuild context drawers, force custom theme profiles, align task menus, and accelerate system rendering speed." },
+                { icon: "layout", title: "Beautiful Dashboard", desc: "Manage your system settings and optimizations from a sleek, responsive interface designed for gamers." },
+                { icon: "check-circle", title: "One Click Optimization", desc: "Deploy multiple safe registries edits instantly in one single click, zero configuration required." }
+            ];
+
+            const statItems = [
+                { val: "50,000+", label: "Active Installations" },
+                { val: "-14ms", label: "Input Delay Reduction" },
+                { val: "+32%", label: "Average FPS Increase" },
+                { val: "99.9%", label: "User Satisfaction" }
+            ];
+
+            const testimonialItems = [
+                { quote: "Pavo Tweak stabilized my frame times completely. I went from micro-stutters to butter-smooth 240Hz gameplay in Valorant.", author: "Marcus 'Viper' Chen", role: "Apex Legends Pro" },
+                { quote: "I was skeptical about registry cleaners, but Pavo's one-click optimization shaved 8ms off mouse response latency. It's legendary.", author: "Sarah Jenkins", role: "Esports Coach" }
+            ];
+
+            const faqItems = [
+                { q: "How do I install Pavo Tweak?", a: "After acquiring a lifetime key, download the compiled Setup package from your dashboard. Execute the setup with Administrator rights, type in your license key, and let the installer complete setup steps. Once finished, launch the desktop app to begin." },
+                { q: "Is Pavo Tweak safe to use?", a: "Absolutely. All tweaks implemented by Pavo Tweak are fully validated against standard Windows parameters. We compile restore checkpoints prior to deploying optimization scripts to safeguard system files." },
+                { q: "What versions of Windows are supported?", a: "Pavo Tweak is optimized for all versions of Windows 10 (Build 1809 and newer) and all Windows 11 releases. It fully supports both 64-bit and ARM structures." },
+                { q: "Does the license key expire?", a: "No. The Pavo Tweak Lifetime package is a one-time purchase ($8 USD) that provides an active, unlimited key including all future releases and update downloads." }
+            ];
+
+            return (
+                <div className="w-full">
+                    {/* HERO SECTION */}
+                    <section id="hero" className="min-h-[calc(100vh-80px)] flex flex-col justify-center py-20 relative overflow-hidden">
+                        {/* Blue glow background gradient accent */}
+                        <div className="absolute top-[20%] right-[10%] w-[500px] h-[500px] bg-brand-blue/10 rounded-full blur-[140px] pointer-events-none z-0" />
+                        
+                        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+                            <div className="lg:col-span-7 text-left flex flex-col items-start gap-6">
+                                <span className="bg-brand-blue/10 border border-brand-border text-brand-blue text-xs font-bold font-display px-3 py-1.5 rounded-full tracking-wider animate-pulse shadow-md shadow-brand-blue/10">WINDOWS 10 & 11 READY</span>
+                                <h1 className="font-display font-black text-5xl sm:text-6xl lg:text-7.5xl leading-[1.05] tracking-tight">THE ULTIMATE <span className="bg-gradient-to-r from-white to-brand-blue bg-clip-text text-transparent">WINDOWS OPTIMIZER</span></h1>
+                                <p className="text-brand-textMuted text-lg sm:text-xl font-normal max-w-xl leading-relaxed">Customize Windows. Optimize Performance. Reduce Processes. Increase FPS. Lower input latency instantly.</p>
+                                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto mt-2">
+                                    <button onClick={() => setView('store')} className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 shadow-lg shadow-brand-blue/20 hover:shadow-brand-blue/40 scale-btn font-display tracking-wide text-center">Buy Now ($8)</button>
+                                    <button onClick={() => { const el = document.getElementById('features'); if (el) window.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' }); }} className="bg-white/5 hover:bg-white/10 border border-brand-border hover:border-white/20 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 text-center font-display tracking-wide backdrop-blur-md">Learn More</button>
+                                </div>
+                            </div>
+                            <div className="lg:col-span-5 flex justify-center items-center">
+                                <div className="product-box-wrapper relative cursor-pointer">
+                                    <div className="product-box-3d w-[280px] h-[370px] sm:w-[320px] sm:h-[425px] rounded-3xl overflow-hidden border border-brand-border/60 shadow-2xl">
+                                        <img src="product_box.png" alt="Pavo Tweak Box" className="w-full h-full object-cover" />
+                                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                                    </div>
+                                    <div className="absolute -bottom-10 left-[10%] w-[80%] h-10 bg-brand-blue/20 rounded-full blur-xl filter -z-10 animate-pulse" />
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* STATISTICS ROW */}
+                    <section className="border-y border-brand-border bg-brand-card/40 backdrop-blur-md py-12 relative z-10">
+                        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+                            {statItems.map((item, idx) => (
+                                <div key={idx} className="flex flex-col gap-1.5">
+                                    <span className="font-display font-black text-3xl sm:text-4xl text-brand-blue">{item.val}</span>
+                                    <span className="text-xs font-semibold text-brand-textMuted tracking-wider uppercase">{item.label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* FEATURES SECTION */}
+                    <section id="features" className="py-24 border-b border-brand-border relative z-10">
+                        <div className="max-w-7xl mx-auto px-6">
+                            <div className="text-center max-w-2xl mx-auto mb-16 flex flex-col items-center gap-4">
+                                <span className="font-display font-bold text-xs tracking-widest text-brand-blue uppercase">UNMATCHED POWER</span>
+                                <h2 className="font-display font-black text-3xl sm:text-4xl leading-tight tracking-tight">Engineered for Latency Domination</h2>
+                                <p className="text-brand-textMuted text-base leading-relaxed">Pavo Tweak cleans systems registries, modifies WMI values, audits background drivers, and prioritizes gaming threads.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {featureItems.map((item, idx) => (
+                                    <div key={idx} className="bg-brand-card/50 hover:bg-brand-card/80 border border-brand-border hover:border-brand-blue/30 p-8 rounded-2xl transition-all duration-300 hover:-translate-y-1.5 flex flex-col gap-4 group hover:shadow-xl hover:shadow-brand-blue/5">
+                                        <div className="w-12 h-12 rounded-xl bg-brand-blue/10 border border-brand-blue/20 text-brand-blue flex items-center justify-center group-hover:bg-brand-blue group-hover:text-white transition-all duration-300 group-hover:scale-105 shadow-md shadow-brand-blue/15">
+                                            <Icon name={item.icon} className="w-5 h-5" />
+                                        </div>
+                                        <h3 className="font-display font-bold text-lg text-white group-hover:text-brand-blue transition-colors duration-200">{item.title}</h3>
+                                        <p className="text-brand-textMuted text-sm leading-relaxed">{item.desc}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* TESTIMONIALS */}
+                    <section className="py-24 border-b border-brand-border relative z-10 overflow-hidden">
+                        <div className="absolute top-[30%] left-[5%] w-[400px] h-[400px] bg-brand-blue/5 rounded-full blur-[120px] pointer-events-none" />
+                        <div className="max-w-7xl mx-auto px-6">
+                            <div className="text-center max-w-2xl mx-auto mb-16 flex flex-col items-center gap-4">
+                                <span className="font-display font-bold text-xs tracking-widest text-brand-blue uppercase">USER FEEDBACK</span>
+                                <h2 className="font-display font-black text-3xl sm:text-4xl tracking-tight">Approved by Champions</h2>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {testimonialItems.map((t, idx) => (
+                                    <div key={idx} className="bg-brand-card/30 border border-brand-border p-8 sm:p-10 rounded-2xl flex flex-col justify-between gap-8 relative backdrop-blur-md">
+                                        <span className="absolute top-6 left-6 text-7xl font-serif text-brand-blue/10 pointer-events-none">“</span>
+                                        <p className="text-white text-base sm:text-lg italic leading-relaxed relative z-10">{t.quote}</p>
+                                        <div className="flex items-center gap-4 border-t border-brand-border/60 pt-6">
+                                            <div className="w-10 h-10 rounded-full bg-brand-blue/20 border border-brand-blue/40 flex items-center justify-center font-display font-bold text-brand-blue">{t.author[0]}</div>
+                                            <div className="flex flex-col text-left">
+                                                <span className="font-display font-bold text-sm text-white">{t.author}</span>
+                                                <span className="text-xs text-brand-textMuted">{t.role}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* FAQ ACCORDION */}
+                    <section id="faq" className="py-24 border-b border-brand-border relative z-10">
+                        <div className="max-w-4xl mx-auto px-6">
+                            <div className="text-center max-w-2xl mx-auto mb-16 flex flex-col items-center gap-4">
+                                <span className="font-display font-bold text-xs tracking-widest text-brand-blue uppercase">FAQ</span>
+                                <h2 className="font-display font-black text-3xl sm:text-4xl tracking-tight">Frequently Asked Questions</h2>
+                            </div>
+
+                            <div className="flex flex-col gap-4">
+                                {faqItems.map((item, idx) => (
+                                    <div key={idx} className="bg-brand-card/40 border border-brand-border rounded-xl overflow-hidden hover:bg-brand-card/65 transition-colors duration-200">
+                                        <button onClick={() => setActiveFAQ(activeFAQ === idx ? null : idx)} className="w-full px-6 py-5 text-left font-display font-bold text-base flex justify-between items-center text-white focus:outline-none">
+                                            <span>{item.q}</span>
+                                            <Icon name="chevron-down" className={`w-5 h-5 text-brand-textMuted transition-transform duration-300 ${activeFAQ === idx ? 'rotate-180 text-brand-blue' : ''}`} />
+                                        </button>
+                                        <div className={`transition-all duration-300 ease-in-out overflow-hidden ${activeFAQ === idx ? 'max-h-[300px] border-t border-brand-border/30' : 'max-h-0'}`}>
+                                            <p className="px-6 py-5 text-sm text-brand-textMuted leading-relaxed">{item.a}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* CONTACT SECTION */}
+                    <section id="contact" class="py-24 relative z-10">
+                        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                            <div className="lg:col-span-5 text-left flex flex-col items-start gap-4">
+                                <span className="font-display font-bold text-xs tracking-widest text-brand-blue uppercase">GET IN TOUCH</span>
+                                <h2 className="font-display font-black text-3xl sm:text-4xl tracking-tight leading-none">Need Support?</h2>
+                                <p className="text-brand-textMuted text-sm leading-relaxed mb-4">Have questions about optimizations, compatibility, or licenses? Reach out. Our engineers reply within 12 hours.</p>
+                                
+                                <div className="flex flex-col gap-4 w-full">
+                                    <a href="https://discord.gg/pavotweak" target="_blank" className="flex items-center gap-3 bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-3.5 rounded-xl font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg shadow-[#5865f2]/20 w-fit">
+                                        <Icon name="message-square" className="w-5 h-5" /> Join Discord Server
+                                    </a>
+                                    <div className="flex items-center gap-3 text-sm text-brand-textMuted mt-1">
+                                        <Icon name="mail" className="w-4 h-4 text-brand-blue" />
+                                        <span>support@pavotweak.com</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-7">
+                                <div className="bg-brand-card/75 border border-brand-border p-8 sm:p-10 rounded-2xl backdrop-blur-md">
+                                    <form onSubmit={handleSubmitContact} className="flex flex-col gap-5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="flex flex-col gap-2 text-left">
+                                                <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Name</label>
+                                                <input type="text" value={contactForm.name} onChange={(e) => setContactForm({...contactForm, name: e.target.value})} placeholder="John Doe" required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200" />
+                                            </div>
+                                            <div className="flex flex-col gap-2 text-left">
+                                                <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Email</label>
+                                                <input type="email" value={contactForm.email} onChange={(e) => setContactForm({...contactForm, email: e.target.value})} placeholder="john@example.com" required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200" />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2 text-left">
+                                            <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Subject</label>
+                                            <input type="text" value={contactForm.subject} onChange={(e) => setContactForm({...contactForm, subject: e.target.value})} placeholder="Licensing help, setup query..." required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200" />
+                                        </div>
+                                        <div className="flex flex-col gap-2 text-left">
+                                            <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Message</label>
+                                            <textarea rows="4" value={contactForm.message} onChange={(e) => setContactForm({...contactForm, message: e.target.value})} placeholder="Describe your request..." required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200 resize-none" />
+                                        </div>
+                                        <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl transition-all duration-300 shadow-md hover:shadow-brand-blue/20 scale-btn font-display tracking-wide mt-2">Send Message</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 6. STORE VIEW
+        // ==========================================================================
+        function StoreView({ cart, setCart, setCartOpen, triggerToast }) {
+            const product = {
+                id: "pavo_lifetime",
+                name: "Pavo Tweak Lifetime",
+                price: 8.00,
+                desc: "One-time purchase license. Unlimited PC configurations. Automated updates."
+            };
+
+            const handleAddToCart = () => {
+                if (cart.some(item => item.id === product.id)) {
+                    triggerToast("Cart Notice", "Pavo Tweak Lifetime is already in your cart.", "info");
+                    setCartOpen(true);
+                    return;
+                }
+                const updated = [...cart, { ...product, qty: 1 }];
+                setCart(updated);
+                db.set("pt_cart", updated);
+                triggerToast("Added to Cart", "Pavo Tweak Lifetime added to cart successfully.", "success");
+                setCartOpen(true);
+            };
+
+            return (
+                <div className="py-20 relative z-10">
+                    <div className="absolute top-[20%] left-[20%] w-[500px] h-[500px] bg-brand-blue/5 rounded-full blur-[140px] pointer-events-none" />
+                    
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="text-center max-w-2xl mx-auto mb-16 flex flex-col items-center gap-4">
+                            <span className="font-display font-bold text-xs tracking-widest text-brand-blue uppercase">STORE</span>
+                            <h2 className="font-display font-black text-4xl tracking-tight">Acquire License Access</h2>
+                            <p className="text-brand-textMuted text-base">Get lifetime setup utility access and support updates in one single payment.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center max-w-5xl mx-auto">
+                            <div className="lg:col-span-6 flex justify-center">
+                                <div className="relative group">
+                                    <div className="w-[280px] h-[370px] sm:w-[320px] sm:h-[420px] bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]">
+                                        <img src="product_box.png" alt="Pavo Tweak Lifetime product box image" className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="absolute -bottom-10 left-[10%] w-[80%] h-10 bg-brand-blue/20 rounded-full blur-xl filter -z-10 group-hover:bg-brand-blue/30 transition-colors" />
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-6 text-left">
+                                <div className="bg-brand-card/85 border border-brand-border p-8 sm:p-10 rounded-2xl backdrop-blur-md flex flex-col gap-6">
+                                    <div>
+                                        <span className="bg-brand-blue text-white text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider font-display uppercase shadow-md shadow-brand-blue/35 inline-block mb-3">BESTSELLER</span>
+                                        <h3 className="font-display font-extrabold text-2xl text-white">Pavo Tweak Lifetime Package</h3>
+                                        <p className="text-brand-textMuted text-sm leading-relaxed mt-2">{product.desc}</p>
+                                    </div>
+
+                                    <div className="flex items-baseline gap-1 py-2 border-y border-brand-border/40 my-1">
+                                        <span className="text-xl font-bold font-display text-white">$</span>
+                                        <span className="text-5xl font-black font-display text-white">8.00</span>
+                                        <span className="text-xs font-semibold text-brand-textMuted uppercase ml-2">USD (one-time fee)</span>
+                                    </div>
+
+                                    <ul className="flex flex-col gap-3 text-sm">
+                                        <li className="flex items-center gap-3">
+                                            <Icon name="check-circle-2" className="w-5 h-5 text-brand-green" />
+                                            <span>Lifetime Product Key</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <Icon name="check-circle-2" className="w-5 h-5 text-brand-green" />
+                                            <span>Full Software Downloads Included</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <Icon name="check-circle-2" className="w-5 h-5 text-brand-green" />
+                                            <span>Instant Delivery to Dashboard Inbox</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <Icon name="check-circle-2" className="w-5 h-5 text-brand-green" />
+                                            <span>Premium Registry & OS Configuration files</span>
+                                        </li>
+                                    </ul>
+
+                                    <button onClick={handleAddToCart} className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-4 rounded-xl transition-all duration-300 shadow-md hover:shadow-brand-blue/30 scale-btn font-display tracking-wide text-center">Add to Cart</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 7. USER DASHBOARD VIEW
+        // ==========================================================================
+        function DashboardView({ user, setView, triggerToast }) {
+            const [keys, setKeys] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [releases, setReleases] = useState([]);
+
+            useEffect(() => {
+                setKeys(db.get("pt_keys").filter(k => k.userEmail === user.email));
+                setOrders(db.get("pt_orders").filter(o => o.userEmail === user.email));
+                setReleases(db.get("pt_releases"));
+            }, [user]);
+
+            const copyKey = (keyStr) => {
+                navigator.clipboard.writeText(keyStr).then(() => {
+                    triggerToast("Key Copied", "License key copied to clipboard.", "success");
+                });
+            };
+
+            const downloadFile = (e) => {
+                triggerToast("Download Started", "Retrieving PavoSetup.exe bundle file...", "success");
+            };
+
+            return (
+                <div className="py-12 relative z-10">
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-brand-border pb-6 mb-8 gap-4 text-left">
+                            <div>
+                                <h2 className="font-display font-black text-3xl text-white">Welcome back, <span className="text-brand-blue">{user.username}</span></h2>
+                                <p className="text-brand-textMuted text-sm mt-1">Configure registry profiles, manage systems keys, and download installer packages.</p>
+                            </div>
+                            <div className="flex items-center gap-2 bg-white/3 border border-brand-border rounded-full px-4 py-1.5 text-xs font-semibold">
+                                <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse shadow-md shadow-brand-green/30" />
+                                Secured Session
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                            {/* Column 1 */}
+                            <div className="lg:col-span-6 flex flex-col gap-8">
+                                {/* Purchased Products */}
+                                <div className="bg-brand-card/80 border border-brand-border p-6 rounded-2xl flex flex-col gap-5 text-left">
+                                    <h3 className="font-display font-bold text-md tracking-wider text-white uppercase flex items-center gap-2.5">
+                                        <Icon name="package" className="w-4 h-4 text-brand-blue" /> Purchased Products
+                                    </h3>
+                                    
+                                    {keys.length === 0 ? (
+                                        <div className="border border-dashed border-brand-border rounded-xl p-8 text-center flex flex-col items-center gap-4">
+                                            <p className="text-sm text-brand-textMuted max-w-[260px]">No active products purchased. Explore the store page to buy a lifetime license.</p>
+                                            <button onClick={() => setView('store')} className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all">Go to Store</button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white/2 border border-brand-border rounded-xl p-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-lg bg-brand-blue/10 border border-brand-blue/20 text-brand-blue flex items-center justify-center">
+                                                    <Icon name="box" className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-sm">Pavo Tweak Lifetime</span>
+                                                    <span className="text-xs text-brand-textMuted">Licenses Owned: {keys.length}</span>
+                                                </div>
+                                            </div>
+                                            <span className="bg-brand-green/10 border border-brand-green/20 text-brand-green text-[10px] font-bold px-2 py-0.5 rounded uppercase">ACTIVE</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* License Keys List */}
+                                <div className="bg-brand-card/80 border border-brand-border p-6 rounded-2xl flex flex-col gap-5 text-left">
+                                    <h3 className="font-display font-bold text-md tracking-wider text-white uppercase flex items-center gap-2.5">
+                                        <Icon name="key" className="w-4 h-4 text-brand-blue" /> System License Keys
+                                    </h3>
+
+                                    {keys.length === 0 ? (
+                                        <div className="border border-dashed border-brand-border rounded-xl p-8 text-center">
+                                            <p className="text-sm text-brand-textMuted">Key registries will populate after checkout.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-3">
+                                            {keys.map((k, idx) => (
+                                                <div key={idx} className="bg-white/2 border border-brand-border rounded-xl p-4 flex items-center justify-between gap-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] font-semibold text-brand-textMuted tracking-wider uppercase">LICENSE KEY</span>
+                                                        <code className="text-sm font-bold text-white tracking-wide">{k.key}</code>
+                                                    </div>
+                                                    <button onClick={() => copyKey(k.key)} className="bg-white/5 hover:bg-white/10 border border-brand-border hover:border-white/25 text-xs font-semibold px-4 py-2 rounded-lg transition-all focus:outline-none">Copy</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Column 2 */}
+                            <div className="lg:col-span-6 flex flex-col gap-8">
+                                {/* Downloads Box */}
+                                <div className="bg-brand-card/80 border border-brand-border p-6 rounded-2xl flex flex-col gap-5 text-left">
+                                    <h3 className="font-display font-bold text-md tracking-wider text-white uppercase flex items-center gap-2.5">
+                                        <Icon name="download" className="w-4 h-4 text-brand-blue" /> Downloads
+                                    </h3>
+
+                                    {keys.length === 0 ? (
+                                        <div className="border border-dashed border-brand-border rounded-xl p-8 text-center flex flex-col items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-brand-red/5 border border-brand-red/20 text-brand-red flex items-center justify-center">
+                                                <Icon name="lock" className="w-5 h-5" />
+                                            </div>
+                                            <p className="text-sm text-brand-textMuted max-w-[220px]">Setup download locked. Purchase product to gain downloads access.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-6">
+                                            <div className="bg-gradient-to-r from-brand-blue/10 to-brand-blue/2 border border-brand-blue/20 rounded-xl p-4 flex items-center justify-between gap-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-sm">Pavo Setup Suite (v1.2.0)</span>
+                                                    <span className="text-xs text-brand-textMuted">Binary executable (Gzip compressed) | Size: 1.2 MB</span>
+                                                </div>
+                                                <a href="../PavoSetup.exe" download onClick={downloadFile} className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md transition-all flex items-center gap-1.5">
+                                                    <Icon name="download" className="w-3.5 h-3.5" /> Download
+                                                </a>
+                                            </div>
+
+                                            <div>
+                                                <h4 className="text-xs font-bold tracking-wider text-white uppercase mb-3">Version Release Changelogs</h4>
+                                                <div className="flex flex-col gap-3 max-h-[220px] overflow-y-auto pr-2">
+                                                    {releases.map((rel, idx) => (
+                                                        <div key={idx} className="bg-white/2 border border-brand-border rounded-lg p-3.5 text-xs flex flex-col gap-1.5">
+                                                            <div className="flex justify-between font-semibold">
+                                                                <span className="text-brand-blue">v{rel.version}</span>
+                                                                <span className="text-brand-textMuted">{rel.date}</span>
+                                                            </div>
+                                                            <p className="text-brand-textMuted leading-relaxed">{rel.notes}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Order History */}
+                                <div className="bg-brand-card/80 border border-brand-border p-6 rounded-2xl flex flex-col gap-5 text-left">
+                                    <h3 className="font-display font-bold text-md tracking-wider text-white uppercase flex items-center gap-2.5">
+                                        <Icon name="file-text" className="w-4 h-4 text-brand-blue" /> Order History
+                                    </h3>
+
+                                    {orders.length === 0 ? (
+                                        <div className="border border-dashed border-brand-border rounded-xl p-8 text-center">
+                                            <p className="text-sm text-brand-textMuted">No purchase invoices registered.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-3">
+                                            {orders.map((ord, idx) => (
+                                                <div key={idx} className="bg-white/2 border border-brand-border rounded-xl p-4 flex flex-col gap-3 text-xs">
+                                                    <div className="flex justify-between border-b border-brand-border/30 pb-2">
+                                                        <span className="font-bold text-white">{ord.orderId}</span>
+                                                        <span className="text-brand-textMuted">{new Date(ord.date).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="font-medium text-brand-textMuted">{ord.productName}</span>
+                                                        <span className="font-bold text-brand-blue font-display">$8.00 USD</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 8. PROFILE SETTINGS VIEW
+        // ==========================================================================
+        function ProfileView({ user, setUser, triggerToast }) {
+            const [username, setUsername] = useState(user.username);
+            const [email, setEmail] = useState(user.email);
+            const [avatar, setAvatar] = useState(user.avatar);
+            const [passForm, setPassForm] = useState({ current: '', newPass: '', confirm: '' });
+
+            const avatarChoices = [
+                "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=120&auto=format&fit=crop",
+                "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?q=80&w=120&auto=format&fit=crop",
+                "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=120&auto=format&fit=crop",
+                "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=120&auto=format&fit=crop"
+            ];
+
+            const handleUpdateProfile = (e) => {
+                e.preventDefault();
+                let users = db.get("pt_users");
+
+                // Validate unique email details
+                if (email.toLowerCase() !== user.email.toLowerCase() && users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+                    triggerToast("Update Error", "This email address is already in use.", "error");
+                    return;
+                }
+
+                // Update users table in storage DB
+                users = users.map(u => {
+                    if (u.email.toLowerCase() === user.email.toLowerCase()) {
+                        u.username = username;
+                        u.email = email;
+                        u.avatar = avatar;
+                    }
+                    return u;
+                });
+                db.set("pt_users", users);
+
+                // Update orders/keys referring to old email
+                if (email.toLowerCase() !== user.email.toLowerCase()) {
+                    let keys = db.get("pt_keys");
+                    keys = keys.map(k => { if (k.userEmail === user.email) k.userEmail = email; return k; });
+                    db.set("pt_keys", keys);
+
+                    let orders = db.get("pt_orders");
+                    orders = orders.map(o => { if (o.userEmail === user.email) o.userEmail = email; return o; });
+                    db.set("pt_orders", orders);
+                }
+
+                const updatedUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+                db.setCurrentUser(updatedUser);
+                setUser(updatedUser);
+                triggerToast("Profile Updated", "Account settings saved successfully.", "success");
+            };
+
+            const handleChangePass = (e) => {
+                e.preventDefault();
+                if (hashPassword(passForm.current) !== user.passwordHash) {
+                    triggerToast("Validation Failed", "Current password entered is incorrect.", "error");
+                    return;
+                }
+                if (passForm.newPass !== passForm.confirm) {
+                    triggerToast("Mismatch Error", "Passwords do not match.", "error");
+                    return;
+                }
+
+                let users = db.get("pt_users");
+                users = users.map(u => {
+                    if (u.email.toLowerCase() === user.email.toLowerCase()) {
+                        u.passwordHash = hashPassword(passForm.newPass);
+                    }
+                    return u;
+                });
+                db.set("pt_users", users);
+
+                setPassForm({ current: '', newPass: '', confirm: '' });
+                const updatedUser = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+                db.setCurrentUser(updatedUser);
+                setUser(updatedUser);
+                triggerToast("Password Changed", "Security parameters updated.", "success");
+            };
+
+            return (
+                <div className="py-12 relative z-10">
+                    <div className="max-w-2xl mx-auto px-6">
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl backdrop-blur-md text-left flex flex-col gap-8">
+                            <div>
+                                <h2 className="font-display font-black text-2xl text-white">Profile Settings</h2>
+                                <p className="text-brand-textMuted text-xs mt-1">Configure your personal credentials and customize security passwords.</p>
+                            </div>
+
+                            {/* Avatar selector */}
+                            <div className="bg-white/2 border border-brand-border p-4 rounded-xl flex items-center gap-6">
+                                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-brand-blue shadow-lg shadow-brand-blue/30 flex-shrink-0">
+                                    <img src={avatar} alt="Current profile picture" className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <span className="text-[10px] font-bold text-brand-textMuted tracking-wider uppercase">Select Profile Photo</span>
+                                    <div className="flex gap-2">
+                                        {avatarChoices.map((choice, idx) => (
+                                            <img 
+                                                key={idx} 
+                                                src={choice} 
+                                                onClick={() => setAvatar(choice)} 
+                                                alt="Photo option" 
+                                                className={`w-8 h-8 rounded-full object-cover cursor-pointer border hover:scale-105 transition-all ${avatar === choice ? 'border-brand-blue scale-105 shadow-md shadow-brand-blue/20' : 'border-transparent'}`} 
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Details form */}
+                            <form onSubmit={handleUpdateProfile} className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Username</label>
+                                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required minLength="3" className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Email Address</label>
+                                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3 px-6 rounded-xl transition-all shadow-md mt-2 scale-btn text-sm font-display tracking-wide text-center">Update Settings</button>
+                            </form>
+
+                            <hr className="border-brand-border/40" />
+
+                            {/* Password change form */}
+                            <form onSubmit={handleChangePass} className="flex flex-col gap-5">
+                                <h3 className="font-display font-bold text-base text-white uppercase tracking-wide">Security updates</h3>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Current Password</label>
+                                    <input type="password" value={passForm.current} onChange={(e) => setPassForm({...passForm, current: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">New Password</label>
+                                        <input type="password" value={passForm.newPass} onChange={(e) => setPassForm({...passForm, newPass: e.target.value})} required minLength="8" className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Confirm New Password</label>
+                                        <input type="password" value={passForm.confirm} onChange={(e) => setPassForm({...passForm, confirm: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue focus:bg-brand-blue/3 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                    </div>
+                                </div>
+                                <button type="submit" className="bg-white/5 hover:bg-white/10 border border-brand-border hover:border-white/20 text-white font-semibold py-3 px-6 rounded-xl transition-all mt-2 scale-btn text-sm font-display tracking-wide text-center">Change Password</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 9. ADMIN PANEL VIEW
+        // ==========================================================================
+        // ==========================================================================
+        // 9a. ADMIN LOGIN GATEWAY VIEW
+        // ==========================================================================
+        function AdminLoginView({ setAdminUser, triggerToast }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const users = db.get("pt_users") || [];
+                const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+                if (!found) {
+                    triggerToast("Authentication Failed", "Invalid credentials or unauthorized account.", "error");
+                    return;
+                }
+
+                if (found.passwordHash !== hashPassword(password)) {
+                    triggerToast("Authentication Failed", "Invalid credentials or unauthorized account.", "error");
+                    return;
+                }
+
+                if (found.role !== 'admin') {
+                    triggerToast("Access Denied", "Only administrators can access the admin panel.", "error");
+                    return;
+                }
+
+                setAdminUser(found);
+                triggerToast("Welcome Back Admin", "Logged in successfully to Admin Shell.", "success");
+            };
+
+            return (
+                <div className="py-20 relative z-10 text-left flex justify-center items-center">
+                    <div className="max-w-md w-full bg-brand-card border border-brand-border p-8 rounded-3xl shadow-2xl scale-in">
+                        <div className="text-center flex flex-col items-center gap-3 mb-6">
+                            <div className="w-12 h-12 rounded-full bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red">
+                                <Icon name="shield" className="w-6 h-6" />
+                            </div>
+                            <h2 className="font-display font-black text-2xl text-white">Administrator Shell</h2>
+                            <p className="text-brand-textMuted text-xs leading-relaxed max-w-xs">
+                                Enforced security gateway. Standard accounts are not permitted past this point.
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-semibold text-brand-textMuted uppercase tracking-wider">Admin Email</label>
+                                <input 
+                                    type="email" 
+                                    value={email} 
+                                    onChange={(e) => setEmail(e.target.value)} 
+                                    required 
+                                    placeholder="admin@pavotweak.com" 
+                                    className="bg-black/40 border border-brand-border rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-blue transition-all" 
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-semibold text-brand-textMuted uppercase tracking-wider">Password</label>
+                                <input 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)} 
+                                    required 
+                                    placeholder="••••••••" 
+                                    className="bg-black/40 border border-brand-border rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-blue transition-all" 
+                                />
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                className="bg-brand-red hover:bg-[#ff3b47] text-white font-semibold py-3 rounded-xl shadow-lg shadow-brand-red/20 transition-all font-display text-xs tracking-wider uppercase text-center mt-2"
+                            >
+                                Authenticate Shell
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 9b. REVISED ADMIN DASHBOARD VIEW
+        // ==========================================================================
+        function AdminView({ adminUser, setAdminUser, setView, triggerToast }) {
+            const [users, setUsers] = useState([]);
+            const [keys, setKeys] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [stats, setStats] = useState({ users: 0, sales: 0, revenue: 0, keys: 0 });
+            const [searchQuery, setSearchQuery] = useState('');
+            const [selectedUser, setSelectedUser] = useState(null);
+            
+            const [keyOutput, setKeyOutput] = useState('PAVO-XXXX-XXXX-XXXX');
+            const [releaseForm, setReleaseForm] = useState({ version: '', date: '', notes: '' });
+
+            useEffect(() => {
+                if (!adminUser || adminUser.role !== 'admin') {
+                    setAdminUser(null);
+                    setView('home');
+                    return;
+                }
+                loadData();
+            }, [adminUser]);
+
+            const loadData = () => {
+                const uList = db.get("pt_users") || [];
+                const kList = db.get("pt_keys") || [];
+                const oList = db.get("pt_orders") || [];
+
+                setUsers(uList);
+                setKeys(kList);
+                setOrders(oList);
+
+                let rev = oList.reduce((sum, ord) => sum + ord.price, 0);
+                let activeKeysCount = kList.filter(k => k.status === 'active').length;
+
+                setStats({
+                    users: uList.length,
+                    sales: oList.length,
+                    revenue: rev,
+                    keys: activeKeysCount
+                });
+            };
+
+            const handleToggleBan = (email) => {
+                if (email.toLowerCase() === adminUser.email.toLowerCase()) {
+                    triggerToast("Banning Blocked", "You cannot ban your own admin account.", "error");
+                    return;
+                }
+
+                let uList = db.get("pt_users") || [];
+                uList = uList.map(u => {
+                    if (u.email.toLowerCase() === email.toLowerCase()) {
+                        u.banned = !u.banned;
+                    }
+                    return u;
+                });
+                db.set("pt_users", uList);
+                loadData();
+                triggerToast("User Status Updated", "Banned status has been toggled.", "info");
+
+                if (selectedUser && selectedUser.email.toLowerCase() === email.toLowerCase()) {
+                    const freshUser = uList.find(u => u.email.toLowerCase() === email.toLowerCase());
+                    setSelectedUser(freshUser);
+                }
+            };
+
+            const handleDeleteUser = (email) => {
+                if (email.toLowerCase() === adminUser.email.toLowerCase()) {
+                    triggerToast("Deletion Blocked", "You cannot delete your own admin account.", "error");
+                    return;
+                }
+
+                if (!confirm(`Are you sure you want to permanently delete the account for ${email}? This action is irreversible.`)) {
+                    return;
+                }
+
+                let uList = db.get("pt_users") || [];
+                uList = uList.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+                db.set("pt_users", uList);
+                loadData();
+                triggerToast("User Deleted", "The account has been removed from the database.", "info");
+                setSelectedUser(null);
+            };
+
+            const handleGenerateKey = () => {
+                const freshKey = "PAVO-" + generateRandomCode(4).toUpperCase() + "-" + generateRandomCode(4).toUpperCase() + "-" + generateRandomCode(4).toUpperCase();
+                let kList = db.get("pt_keys") || [];
+                kList.push({
+                    key: freshKey,
+                    status: 'active',
+                    userEmail: null
+                });
+                db.set("pt_keys", kList);
+                setKeyOutput(freshKey);
+                loadData();
+                triggerToast("Key Compiled", "New license key written to data tables.", "success");
+            };
+
+            const handleDeleteKey = (keyStr) => {
+                let kList = db.get("pt_keys") || [];
+                kList = kList.filter(k => k.key !== keyStr);
+                db.set("pt_keys", kList);
+                loadData();
+                triggerToast("Key Deleted", "Key removed from database.", "info");
+            };
+
+            const handleToggleKeyStatus = (keyStr, newStatus) => {
+                let kList = db.get("pt_keys") || [];
+                kList = kList.map(k => {
+                    if (k.key === keyStr) k.status = newStatus;
+                    return k;
+                });
+                db.set("pt_keys", kList);
+                loadData();
+                triggerToast("Key Status Modified", `Key status updated to ${newStatus}.`, "info");
+            };
+
+            const handleAddRelease = (e) => {
+                e.preventDefault();
+                let releases = db.get("pt_releases") || [];
+                releases.unshift(releaseForm);
+                db.set("pt_releases", releases);
+                setReleaseForm({ version: '', date: '', notes: '' });
+                triggerToast("Version logs compiled", `Published log files for release v${releaseForm.version}.`, "success");
+            };
+
+            const handleAdminLogout = () => {
+                setAdminUser(null);
+                setView('home');
+                window.location.hash = '#/home';
+                triggerToast("Admin Logged Out", "Administrative session ended.", "info");
+            };
+
+            const filteredUsers = users.filter(u => 
+                u.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                u.email.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            const getUserOrders = (email) => {
+                return orders.filter(o => o.userEmail.toLowerCase() === email.toLowerCase());
+            };
+
+            return (
+                <div className="py-12 relative z-10 text-left">
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-brand-border pb-6 mb-8 gap-4">
+                            <div>
+                                <h2 className="font-display font-black text-3xl text-white">Admin Operations Panel</h2>
+                                <p className="text-brand-textMuted text-sm mt-1">Manage database records, compile system licenses, and publish updates log files.</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={handleAdminLogout}
+                                    className="bg-white/5 hover:bg-white/10 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all border border-brand-border"
+                                >
+                                    Exit Shell
+                                </button>
+                                <div className="bg-brand-red/10 border border-brand-red/25 text-brand-red text-[10px] font-bold rounded-xl px-4 py-2 tracking-wider uppercase flex items-center justify-center">
+                                    SYSTEM OVERLORD SHELL
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-brand-textMuted uppercase tracking-wider">Total Users</span>
+                                <span className="font-display font-black text-3xl">{stats.users}</span>
+                            </div>
+                            <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-brand-textMuted uppercase tracking-wider">Licenses Sold</span>
+                                <span className="font-display font-black text-3xl">{stats.sales}</span>
+                            </div>
+                            <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-brand-textMuted uppercase tracking-wider">Gross Income</span>
+                                <span className="font-display font-black text-3xl text-brand-blue">${stats.revenue.toFixed(2)}</span>
+                            </div>
+                            <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-brand-textMuted uppercase tracking-wider">Active Keys</span>
+                                <span className="font-display font-black text-3xl">{stats.keys}</span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                            <div className="lg:col-span-8 flex flex-col gap-8">
+                                {/* Users manager */}
+                                <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-4">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                        <h3 className="font-display font-bold text-sm tracking-widest text-brand-blue uppercase border-l-2 border-brand-blue pl-3">Registered Users</h3>
+                                        <div className="relative w-full sm:w-64">
+                                            <input 
+                                                type="text" 
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder="Search username or email..." 
+                                                className="bg-black/30 border border-brand-border rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-blue w-full placeholder:text-brand-textMuted"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="overflow-x-auto border border-brand-border rounded-xl bg-black/30">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-white/3 border-b border-brand-border text-brand-textMuted font-display font-bold">
+                                                    <th className="px-4 py-3">Username</th>
+                                                    <th className="px-4 py-3">Email</th>
+                                                    <th className="px-4 py-3">Status</th>
+                                                    <th className="px-4 py-3">Purchases</th>
+                                                    <th className="px-4 py-3 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredUsers.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-4 py-6 text-center text-brand-textMuted italic">No matching users found.</td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredUsers.map((u, idx) => {
+                                                        const userOrders = getUserOrders(u.email);
+                                                        return (
+                                                            <tr key={idx} className="border-b border-brand-border/40 hover:bg-white/1">
+                                                                <td className="px-4 py-3 font-semibold text-white">{u.username}</td>
+                                                                <td className="px-4 py-3 text-brand-textMuted">{u.email}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="flex gap-1.5">
+                                                                        <span className={`font-bold px-2 py-0.5 rounded text-[9px] ${u.banned ? 'bg-brand-red/10 text-brand-red' : 'bg-brand-green/10 text-brand-green'}`}>
+                                                                            {u.banned ? 'BANNED' : 'ACTIVE'}
+                                                                        </span>
+                                                                        <span className={`font-bold px-2 py-0.5 rounded text-[9px] ${u.verified ? 'bg-brand-blue/10 text-brand-blue' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                                                                            {u.verified ? 'VERIFIED' : 'UNVERIFIED'}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-white font-bold">{userOrders.length}</td>
+                                                                <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                                                    <button 
+                                                                        onClick={() => setSelectedUser(u)} 
+                                                                        className="bg-white/5 hover:bg-brand-blue/10 hover:text-brand-blue border border-brand-border px-2.5 py-1 rounded transition-colors"
+                                                                    >
+                                                                        Profile
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleToggleBan(u.email)} 
+                                                                        className={`border px-2.5 py-1 rounded transition-colors ${u.banned ? 'bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-white' : 'bg-brand-red/10 text-brand-red border-brand-red/20 hover:bg-brand-red hover:text-white'}`}
+                                                                    >
+                                                                        {u.banned ? 'Unban' : 'Ban'}
+                                                                    </button>
+                                                                    {u.role !== 'admin' && (
+                                                                        <button 
+                                                                            onClick={() => handleDeleteUser(u.email)} 
+                                                                            className="bg-black/40 hover:bg-brand-red/20 text-brand-textMuted hover:text-brand-red border border-brand-border px-2.5 py-1 rounded transition-colors"
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Key Registry Controller */}
+                                <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-4">
+                                    <h3 className="font-display font-bold text-sm tracking-widest text-brand-blue uppercase border-l-2 border-brand-blue pl-3">Key Registry Controller</h3>
+                                    
+                                    <div className="bg-white/3 border border-brand-border rounded-xl p-4 flex items-center justify-between gap-4">
+                                        <button onClick={handleGenerateKey} className="bg-brand-blue hover:bg-brand-blueHover text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-md transition-all">Compile Key</button>
+                                        <code className="font-display font-bold text-sm text-brand-blue tracking-wide">{keyOutput}</code>
+                                    </div>
+
+                                    <div className="overflow-x-auto border border-brand-border rounded-xl bg-black/30">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-white/3 border-b border-brand-border text-brand-textMuted font-display font-bold">
+                                                    <th className="px-4 py-3">Key Reference</th>
+                                                    <th className="px-4 py-3">Status</th>
+                                                    <th className="px-4 py-3">Assigned User</th>
+                                                    <th className="px-4 py-3 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {keys.map((k, idx) => (
+                                                    <tr key={idx} className="border-b border-brand-border/40 hover:bg-white/1">
+                                                        <td className="px-4 py-3 font-mono font-bold text-brand-blue">{k.key}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`font-bold px-2 py-0.5 rounded text-[9px] ${k.status === 'active' ? 'bg-brand-green/10 text-brand-green' : 'bg-brand-red/10 text-brand-red'}`}>
+                                                                {k.status.toUpperCase()}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-brand-textMuted">{k.userEmail ? k.userEmail : 'Unassigned'}</td>
+                                                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                                            <button onClick={() => handleDeleteKey(k.key)} className="bg-white/5 hover:bg-brand-red/10 hover:text-brand-red border border-brand-border px-2 py-1 rounded transition-colors">Delete</button>
+                                                            {k.status === 'active' ? (
+                                                                <button onClick={() => handleToggleKeyStatus(k.key, 'banned')} className="bg-white/5 border border-brand-border px-2 py-1 rounded transition-colors">Ban</button>
+                                                            ) : (
+                                                                k.status === 'banned' && (
+                                                                    <button onClick={() => handleToggleKeyStatus(k.key, 'active')} className="bg-white/5 border border-brand-border px-2 py-1 rounded transition-colors text-brand-green">Unban</button>
+                                                                )
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-4 flex flex-col gap-8">
+                                <div className="bg-brand-card border border-brand-border p-6 rounded-2xl flex flex-col gap-4">
+                                    <h3 className="font-display font-bold text-sm tracking-widest text-brand-blue uppercase border-l-2 border-brand-blue pl-3">Release Notes compiler</h3>
+                                    <form onSubmit={handleAddRelease} className="flex flex-col gap-4">
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-[10px] font-semibold text-brand-textMuted uppercase">Version Number</label>
+                                            <input type="text" value={releaseForm.version} onChange={(e) => setReleaseForm({...releaseForm, version: e.target.value})} placeholder="e.g. 1.2.5" required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-3 py-2 text-xs text-white focus:outline-none transition-all" />
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-[10px] font-semibold text-brand-textMuted uppercase">Release Date</label>
+                                            <input type="date" value={releaseForm.date} onChange={(e) => setReleaseForm({...releaseForm, date: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-3 py-2 text-xs text-white focus:outline-none transition-all" />
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-[10px] font-semibold text-brand-textMuted uppercase">Changelog description</label>
+                                            <textarea rows="4" value={releaseForm.notes} onChange={(e) => setReleaseForm({...releaseForm, notes: e.target.value})} placeholder="Notes of changes compiled..." required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-3 py-2 text-xs text-white focus:outline-none transition-all resize-none" />
+                                        </div>
+                                        <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-2.5 rounded-xl shadow-md transition-all text-xs">Publish Version Log</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {selectedUser && (() => {
+                        const userOrders = getUserOrders(selectedUser.email);
+                        return (
+                            <div className="fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm z-[1500] flex justify-center items-center p-6" onClick={() => setSelectedUser(null)}>
+                                <div className="bg-brand-card border border-brand-border p-8 rounded-3xl w-full max-w-[650px] max-h-[90%] overflow-y-auto flex flex-col gap-6 shadow-2xl scale-in" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center border-b border-brand-border pb-4">
+                                        <h3 className="font-display font-black text-xl text-white">User Profile Details</h3>
+                                        <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-white/5 border border-transparent hover:border-brand-border rounded-lg text-brand-textMuted hover:text-white focus:outline-none">
+                                            <Icon name="x" className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex flex-col gap-5">
+                                        <div className="grid grid-cols-2 gap-4 bg-white/2 border border-brand-border/60 p-4 rounded-xl text-xs">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-brand-textMuted uppercase font-bold">Username</span>
+                                                <span className="text-white font-semibold text-sm">{selectedUser.username}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-brand-textMuted uppercase font-bold">Email Address</span>
+                                                <span className="text-white font-semibold text-sm">{selectedUser.email}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-brand-textMuted uppercase font-bold">Account Created</span>
+                                                <span className="text-white font-semibold text-sm">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-brand-textMuted uppercase font-bold">Account Verification Status</span>
+                                                <span className={`font-semibold text-xs ${selectedUser.verified ? 'text-brand-blue' : 'text-yellow-500'}`}>{selectedUser.verified ? 'Verified Account' : 'Unverified'}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1 col-span-2">
+                                                <span className="text-[10px] text-brand-textMuted uppercase font-bold">Account Banned Status</span>
+                                                <span className={`font-semibold text-xs ${selectedUser.banned ? 'text-brand-red' : 'text-brand-green'}`}>{selectedUser.banned ? 'Banned from Access' : 'Active / Allowed'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3">
+                                            <h4 className="font-display font-bold text-xs text-brand-blue uppercase tracking-wider">Purchase History ({userOrders.length})</h4>
+                                            {userOrders.length === 0 ? (
+                                                <div className="bg-white/2 border border-brand-border p-4 rounded-xl text-center text-xs text-brand-textMuted italic">
+                                                    No products purchased yet.
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-2">
+                                                    {userOrders.map((ord, idx) => (
+                                                        <div key={idx} className="bg-white/2 border border-brand-border p-4 rounded-xl flex flex-col gap-2 text-xs">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="font-bold text-white">{ord.productName}</span>
+                                                                <span className="text-brand-blue font-bold">${ord.price.toFixed(2)} USD</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2 text-[10px] text-brand-textMuted">
+                                                                <div>Order ID: <span className="text-white">{ord.orderId}</span></div>
+                                                                <div>Date: <span className="text-white">{new Date(ord.date).toLocaleDateString()}</span></div>
+                                                            </div>
+                                                            <div className="text-[10px] text-brand-textMuted mt-1">
+                                                                License Key: <span className="font-mono text-brand-blue select-all">{ord.licenseKey}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-brand-border/60">
+                                            <button 
+                                                onClick={() => handleToggleBan(selectedUser.email)}
+                                                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${selectedUser.banned ? 'bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-white' : 'bg-brand-red/10 text-brand-red border-brand-red/20 hover:bg-brand-red hover:text-white'}`}
+                                            >
+                                                {selectedUser.banned ? 'Unban Account' : 'Ban Account'}
+                                            </button>
+                                            {selectedUser.role !== 'admin' && (
+                                                <button 
+                                                    onClick={() => handleDeleteUser(selectedUser.email)}
+                                                    className="bg-brand-red hover:bg-brand-red/80 text-white px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                                                >
+                                                    Delete Account
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 10. AUTHENTICATION PAGES (LOGIN / REGISTER / VERIFY / FORGOT / RESET)
+        // ==========================================================================
+        function AuthView({ authState, setAuthState, setUser, setView, triggerToast, sendMockMail, verifyEmailTarget, setVerifyEmailTarget, verificationCodes, setVerificationCodes, captcha, setCaptcha, showCaptcha, setShowCaptcha, processOrderCompletion }) {
+            const [loginForm, setLoginForm] = useState({ email: '', password: '', remember: false, captchaAns: '' });
+            const [regForm, setRegForm] = useState({ username: '', email: '', password: '', confirm: '' });
+            const [verifyCode, setVerifyCode] = useState('');
+            const [forgotEmail, setForgotEmail] = useState('');
+            const [resetForm, setResetForm] = useState({ email: '', code: '', newPass: '', confirm: '' });
+            const [resendCooldown, setResendCooldown] = useState(0);
+
+            useEffect(() => {
+                if (resendCooldown > 0) {
+                    const t = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+                    return () => clearTimeout(t);
+                }
+            }, [resendCooldown]);
+
+            const triggerCaptchaGen = () => {
+                const a = Math.floor(Math.random() * 12) + 2;
+                const b = Math.floor(Math.random() * 12) + 2;
+                setCaptcha({ a, b, ans: a + b });
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const failedLogins = db.get("pt_failed_logins");
+                const attempts = failedLogins[loginForm.email.toLowerCase()] || { count: 0, lockTime: 0 };
+
+                // Rate limiting lockout
+                if (attempts.lockTime && Date.now() < attempts.lockTime) {
+                    const remain = Math.ceil((attempts.lockTime - Date.now()) / 1000);
+                    triggerToast("Account Locked", `Too many failed login attempts. Locked. Wait ${remain}s.`, "error");
+                    return;
+                }
+
+                // Check math CAPTCHA
+                if (attempts.count >= 3) {
+                    if (parseInt(loginForm.captchaAns) !== captcha.ans) {
+                        triggerToast("Captcha Failed", "Security check failed. Try again.", "error");
+                        triggerCaptchaGen();
+                        return;
+                    }
+                }
+
+                const users = db.get("pt_users");
+                const userObj = users.find(u => u.email.toLowerCase() === loginForm.email.toLowerCase());
+
+                if (userObj && userObj.banned) {
+                    triggerToast("Account Banned", "This profile has been banned due to violations.", "error");
+                    return;
+                }
+
+                const hash = hashPassword(loginForm.password);
+                if (userObj && userObj.passwordHash === hash) {
+                    if (!userObj.verified) {
+                        triggerToast("Email Unverified", "Check your inbox for your account verification code.", "error");
+                        setVerifyEmailTarget(userObj.email);
+                        
+                        // Send new code
+                        const code = generate6DigitCode();
+                        const expires = Date.now() + 10 * 60 * 1000;
+                        setVerificationCodes(prev => [...prev.filter(c => c.email !== userObj.email), { email: userObj.email.toLowerCase(), code, exp: expires }]);
+                        sendMockMail(userObj.email, "Verify Your Pavo Tweak Account", `Welcome to Pavo Tweak!<br><br>Please verify your email address to activate your account by entering the following code:<br><div class="email-code-box">${code}</div>This code expires in 10 minutes.`);
+                        
+                        setAuthState('verify');
+                        return;
+                    }
+
+                    // Reset count
+                    delete failedLogins[loginForm.email.toLowerCase()];
+                    db.set("pt_failed_logins", failedLogins);
+
+                    db.setCurrentUser(userObj, loginForm.remember);
+                    setUser(userObj);
+                    triggerToast("Welcome Back", `Successfully logged in as ${userObj.username}.`, "success");
+                    
+                    // Route back to dashboard or complete checkout if cached
+                    const pendingCheckout = sessionStorage.getItem("pt_pending_checkout");
+                    if (pendingCheckout) {
+                        sessionStorage.removeItem("pt_pending_checkout");
+                        processOrderCompletion(userObj.email);
+                    } else {
+                        setView('dashboard');
+                    }
+                } else {
+                    attempts.count++;
+                    if (attempts.count >= 5) {
+                        attempts.lockTime = Date.now() + 30 * 1000;
+                        triggerToast("Security Lockout", "Too many attempts. Blocked for 30s.", "error");
+                    } else if (attempts.count >= 3) {
+                        setShowCaptcha(true);
+                        triggerCaptchaGen();
+                        triggerToast("Security Audit", "Math Captcha required to proceed.", "info");
+                    } else {
+                        triggerToast("Auth Failed", "Invalid email address or password.", "error");
+                    }
+                    failedLogins[loginForm.email.toLowerCase()] = attempts;
+                    db.set("pt_failed_logins", failedLogins);
+                }
+            };
+
+            const handleRegisterSubmit = (e) => {
+                e.preventDefault();
+                try {
+                    let users = db.get("pt_users");
+
+                    if (users.some(u => u.email.toLowerCase() === regForm.email.toLowerCase())) {
+                        triggerToast("Registration Error", "This email address is already registered.", "error");
+                        return;
+                    }
+
+                    if (regForm.password !== regForm.confirm) {
+                        triggerToast("Registration Error", "Passwords do not match.", "error");
+                        return;
+                    }
+
+                    // Write unverified user account to DB
+                    const newU = {
+                        username: regForm.username,
+                        email: regForm.email,
+                        passwordHash: hashPassword(regForm.password),
+                        role: "user",
+                        verified: false,
+                        banned: false,
+                        createdAt: new Date().toISOString(),
+                        avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=120&auto=format&fit=crop"
+                    };
+                    users.push(newU);
+                    db.set("pt_users", users);
+
+                    // Dispatch code mail
+                    const code = generate6DigitCode();
+                    const expires = Date.now() + 10 * 60 * 1000;
+                    setVerificationCodes(prev => {
+                        const current = Array.isArray(prev) ? prev : [];
+                        return [...current.filter(c => c.email !== regForm.email), { email: regForm.email.toLowerCase(), code, exp: expires }];
+                    });
+                    sendMockMail(regForm.email, "Verify Your Pavo Tweak Account", `Welcome to Pavo Tweak!<br><br>Please verify your email address to complete registration by entering the following code:<br><div class="email-code-box">${code}</div>This code expires in 10 minutes.`);
+
+                    setVerifyEmailTarget(regForm.email);
+                    setAuthState('verify');
+                    setResendCooldown(60);
+                    triggerToast("Code Dispatched", "Check the simulated inbox drawer for code details.", "success");
+                } catch (err) {
+                    console.error("Register Error", err);
+                }
+            };
+
+            const handleVerifySubmit = (e) => {
+                e.preventDefault();
+                try {
+                    const currentCodes = Array.isArray(verificationCodes) ? verificationCodes : [];
+                    const record = currentCodes.find(c => c.email.toLowerCase() === verifyEmailTarget.toLowerCase());
+
+                    if (!record) {
+                        triggerToast("Verification Failed", "No verification session found. Register again.", "error");
+                        return;
+                    }
+
+                    if (Date.now() > record.exp) {
+                        triggerToast("Verification Failed", "Code expired. Request a new one.", "error");
+                        return;
+                    }
+
+                    if (record.code !== verifyCode.trim()) {
+                        triggerToast("Verification Failed", "Incorrect 6-digit code.", "error");
+                        return;
+                    }
+
+                    // Activate
+                    let users = db.get("pt_users");
+                    users = users.map(u => {
+                        if (u.email.toLowerCase() === verifyEmailTarget.toLowerCase()) u.verified = true;
+                        return u;
+                    });
+                    db.set("pt_users", users);
+
+                    // Clear records
+                    setVerificationCodes(prev => {
+                        const current = Array.isArray(prev) ? prev : [];
+                        return current.filter(c => c.email.toLowerCase() !== verifyEmailTarget.toLowerCase());
+                    });
+
+                    triggerToast("Email Verified", "Your account has been activated. Welcome to Pavo Tweak!", "success");
+                    
+                    // Login
+                    const activeU = users.find(u => u.email.toLowerCase() === verifyEmailTarget.toLowerCase());
+                    db.setCurrentUser(activeU);
+                    setUser(activeU);
+
+                    // Checkout loop
+                    const pendingCheckout = sessionStorage.getItem("pt_pending_checkout");
+                    if (pendingCheckout) {
+                        sessionStorage.removeItem("pt_pending_checkout");
+                        processOrderCompletion(activeU.email);
+                    } else {
+                        setView('dashboard');
+                    }
+                } catch (err) {
+                    console.error("Verify Error", err);
+                }
+            };
+
+            const handleResendCode = () => {
+                try {
+                    const code = generate6DigitCode();
+                    const expires = Date.now() + 10 * 60 * 1000;
+                    setVerificationCodes(prev => {
+                        const current = Array.isArray(prev) ? prev : [];
+                        return [...current.filter(c => c.email !== verifyEmailTarget), { email: verifyEmailTarget.toLowerCase(), code, exp: expires }];
+                    });
+                    sendMockMail(verifyEmailTarget, "Verify Your Pavo Tweak Account", `Welcome to Pavo Tweak!<br><br>Please verify your email address to complete registration by entering the following code:<br><div class="email-code-box">${code}</div>This code expires in 10 minutes.`);
+                    setResendCooldown(60);
+                    triggerToast("Code Resent", "A new code has been sent to your mock inbox.", "success");
+                } catch (err) {
+                    console.error("Resend Error", err);
+                }
+            };
+
+            const handleForgotSubmit = (e) => {
+                e.preventDefault();
+                try {
+                    const users = db.get("pt_users");
+                    const userObj = users.find(u => u.email.toLowerCase() === forgotEmail.toLowerCase());
+
+                    if (userObj) {
+                        const code = generate6DigitCode();
+                        const expires = Date.now() + 10 * 60 * 1000;
+                        setVerificationCodes(prev => {
+                            const current = Array.isArray(prev) ? prev : [];
+                            return [...current.filter(c => c.email !== forgotEmail), { email: forgotEmail.toLowerCase(), code, exp: expires }];
+                        });
+                        sendMockMail(forgotEmail, "Reset Password Request", `We received a request to reset your Pavo Tweak password.<br><br>Please use the following 6-digit recovery code to choose a new password:<br><div class="email-code-box">${code}</div>If you did not request this, you can safely ignore this email.`);
+                        
+                        setResetForm({...resetForm, email: forgotEmail});
+                        setAuthState('reset');
+                        triggerToast("Code Sent", "Check the simulated inbox drawer for reset code details.", "success");
+                    } else {
+                        triggerToast("Forgot Error", "No account registered with this email.", "error");
+                    }
+                } catch (err) {
+                    console.error("Forgot Error", err);
+                }
+            };
+
+            const handleResetSubmit = (e) => {
+                e.preventDefault();
+                try {
+                    if (resetForm.newPass !== resetForm.confirm) {
+                        triggerToast("Reset Error", "Passwords do not match.", "error");
+                        return;
+                    }
+
+                    const currentCodes = Array.isArray(verificationCodes) ? verificationCodes : [];
+                    const record = currentCodes.find(c => c.email.toLowerCase() === resetForm.email.toLowerCase());
+                    if (!record || record.code !== resetForm.code.trim()) {
+                        triggerToast("Reset Error", "Recovery verification code is invalid.", "error");
+                        return;
+                    }
+
+                    let users = db.get("pt_users");
+                    users = users.map(u => {
+                        if (u.email.toLowerCase() === resetForm.email.toLowerCase()) {
+                            u.passwordHash = hashPassword(resetForm.newPass);
+                        }
+                        return u;
+                    });
+                    db.set("pt_users", users);
+
+                    setVerificationCodes(prev => {
+                        const current = Array.isArray(prev) ? prev : [];
+                        return current.filter(c => c.email.toLowerCase() !== resetForm.email.toLowerCase());
+                    });
+                    triggerToast("Password Reset Success", "Your password has been changed. Logging you in.", "success");
+                    
+                    const activeU = users.find(u => u.email.toLowerCase() === resetForm.email.toLowerCase());
+                    db.setCurrentUser(activeU);
+                    setUser(activeU);
+                    setView('dashboard');
+                } catch (err) {
+                    console.error("Reset Error", err);
+                }
+            };
+
+            return (
+                <div className="container small-container vertical-center min-h-[calc(100vh-160px)] flex justify-center items-center py-16">
+                    {/* LOGIN PANEL */}
+                    {authState === 'login' && (
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl w-full max-w-[430px] text-left backdrop-blur-md scale-in">
+                            <h2 className="font-display font-black text-2xl text-center">Welcome Back</h2>
+                            <p className="text-brand-textMuted text-xs text-center mt-1 mb-8">Login to manage downloads and license keys.</p>
+
+                            <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Email Address</label>
+                                    <input type="email" value={loginForm.email} onChange={(e) => setLoginForm({...loginForm, email: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Password</label>
+                                        <button type="button" onClick={() => setAuthState('forgot')} className="text-xs font-semibold text-brand-blue hover:text-white transition-colors">Forgot?</button>
+                                    </div>
+                                    <input type="password" value={loginForm.password} onChange={(e) => setLoginForm({...loginForm, password: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+
+                                <div className="flex items-center mt-1">
+                                    <label className="flex items-center gap-2 text-xs text-brand-textMuted cursor-pointer">
+                                        <input type="checkbox" checked={loginForm.remember} onChange={(e) => setLoginForm({...loginForm, remember: e.target.checked})} className="rounded bg-white/5 border-brand-border text-brand-blue focus:ring-0" />
+                                        Remember Me
+                                    </label>
+                                </div>
+
+                                {/* Math captcha */}
+                                {showCaptcha && (
+                                    <div className="bg-brand-red/5 border border-brand-red/20 p-4 rounded-xl flex flex-col gap-2 mt-2">
+                                        <span className="text-[10px] font-bold text-brand-red uppercase">Verification Check Required</span>
+                                        <div className="flex items-center gap-4">
+                                            <span className="font-display font-black text-md text-white">{captcha.a} + {captcha.b} = </span>
+                                            <input type="text" value={loginForm.captchaAns} onChange={(e) => setLoginForm({...loginForm, captchaAns: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-lg px-2.5 py-1.5 w-20 text-center text-sm focus:outline-none" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-brand-blue/20 transition-all font-display tracking-wide text-center mt-3">Log In</button>
+                            </form>
+                            
+                            <div className="text-center text-xs text-brand-textMuted mt-6">
+                                Don't have an account? <button onClick={() => setAuthState('register')} className="font-semibold text-brand-blue hover:text-white transition-colors ml-1">Create one</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* REGISTER PANEL */}
+                    {authState === 'register' && (
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl w-full max-w-[430px] text-left backdrop-blur-md scale-in">
+                            <h2 className="font-display font-black text-2xl text-center">Create Account</h2>
+                            <p className="text-brand-textMuted text-xs text-center mt-1 mb-8">Get lifetime license codes updates and support.</p>
+
+                            <form onSubmit={handleRegisterSubmit} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Username</label>
+                                    <input type="text" value={regForm.username} onChange={(e) => setRegForm({...regForm, username: e.target.value})} required minLength="3" className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Email Address</label>
+                                    <input type="email" value={regForm.email} onChange={(e) => setRegForm({...regForm, email: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Password</label>
+                                    <input type="password" value={regForm.password} onChange={(e) => setRegForm({...regForm, password: e.target.value})} required minLength="8" className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Confirm Password</label>
+                                    <input type="password" value={regForm.confirm} onChange={(e) => setRegForm({...regForm, confirm: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-brand-blue/20 transition-all font-display tracking-wide text-center mt-3">Send Verification Code</button>
+                            </form>
+                            
+                            <div className="text-center text-xs text-brand-textMuted mt-6">
+                                Already have an account? <button onClick={() => setAuthState('login')} className="font-semibold text-brand-blue hover:text-white transition-colors ml-1">Log In</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* VERIFY EMAIL PANEL */}
+                    {authState === 'verify' && (
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl w-full max-w-[430px] text-left backdrop-blur-md scale-in">
+                            <h2 className="font-display font-black text-2xl text-center">Verify Your Email</h2>
+                            <p className="text-brand-textMuted text-xs text-center mt-2 mb-8 leading-relaxed">Enter the 6-digit activation code sent to <strong className="text-white">{verifyEmailTarget}</strong>. Verify PavoMail overlay if code hasn't appeared yet.</p>
+
+                            <form onSubmit={handleVerifySubmit} className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-2 text-center">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Verification Code</label>
+                                    <input type="text" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value)} required maxLength="6" placeholder="123456" className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl py-3.5 text-center text-2xl font-bold font-display tracking-[8px] text-brand-blue focus:outline-none transition-all" />
+                                </div>
+
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-brand-blue/20 transition-all font-display tracking-wide text-center">Verify & Activate</button>
+                            </form>
+
+                            <div className="text-center mt-6">
+                                <button onClick={handleResendCode} disabled={resendCooldown > 0} className={`text-xs font-semibold focus:outline-none ${resendCooldown > 0 ? 'text-brand-textMuted cursor-not-allowed' : 'text-brand-blue hover:text-white'}`}>
+                                    {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : "Resend Verification Code"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* FORGOT PASSWORD PANEL */}
+                    {authState === 'forgot' && (
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl w-full max-w-[430px] text-left backdrop-blur-md scale-in">
+                            <h2 className="font-display font-black text-2xl text-center">Forgot Password</h2>
+                            <p className="text-brand-textMuted text-xs text-center mt-1 mb-8">Enter email address to compile recovery procedures.</p>
+
+                            <form onSubmit={handleForgotSubmit} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Email Address</label>
+                                    <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-brand-blue/20 transition-all font-display tracking-wide text-center mt-2">Send Recovery Code</button>
+                            </form>
+
+                            <div className="text-center text-xs text-brand-textMuted mt-6">
+                                Remember password? <button onClick={() => setAuthState('login')} className="font-semibold text-brand-blue hover:text-white transition-colors ml-1">Back to Log In</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* RESET PASSWORD PANEL */}
+                    {authState === 'reset' && (
+                        <div className="bg-brand-card/85 border border-brand-border p-8 rounded-2xl w-full max-w-[430px] text-left backdrop-blur-md scale-in">
+                            <h2 className="font-display font-black text-2xl text-center">Reset Password</h2>
+                            <p className="text-brand-textMuted text-xs text-center mt-1 mb-8">Enter the code from PavoMail and pick a new password.</p>
+
+                            <form onSubmit={handleResetSubmit} className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">6-Digit Recovery Code</label>
+                                    <input type="text" value={resetForm.code} onChange={(e) => setResetForm({...resetForm, code: e.target.value})} required maxLength="6" placeholder="123456" className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl py-3.5 text-center text-xl font-bold font-display tracking-[4px] focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">New Password</label>
+                                    <input type="password" value={resetForm.newPass} onChange={(e) => setResetForm({...resetForm, newPass: e.target.value})} required minLength="8" className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-xs font-semibold tracking-wider text-brand-textMuted uppercase">Confirm New Password</label>
+                                    <input type="password" value={resetForm.confirm} onChange={(e) => setResetForm({...resetForm, confirm: e.target.value})} required className="bg-white/3 border border-brand-border focus:border-brand-blue rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all" />
+                                </div>
+
+                                <button type="submit" className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-brand-blue/20 transition-all font-display tracking-wide text-center mt-3">Reset Password</button>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 11. FOOTER COMPONENT
+        // ==========================================================================
+        function Footer({ setView, setUser, triggerToast, setLegalModal }) {
+            const handleBackdoorAdmin = () => {
+                const users = db.get("pt_users");
+                const admin = users.find(u => u.role === 'admin');
+                if (admin) {
+                    db.setCurrentUser(admin);
+                    setUser(admin);
+                    setView('admin');
+                    triggerToast("Overlord Backdoor", "Logged in as Administrator. Bypassed verification checks for review.", "success");
+                }
+            };
+
+            return (
+                <footer className="border-t border-brand-border bg-[#020203] z-20 relative pt-16 pb-8">
+                    <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-10 border-b border-brand-border pb-12 mb-8 text-left">
+                        <div className="md:col-span-6 flex flex-col gap-4">
+                            <a href="#" onClick={(e) => { e.preventDefault(); setView('home'); }} className="flex items-center gap-2">
+                                <svg viewBox="0 0 100 100" className="h-7 w-7 text-brand-blue" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="30" y1="20" x2="30" y2="80" />
+                                    <path d="M30 20h26c12 0 22 10 22 22s-10 22-22 22H45" />
+                                </svg>
+                                <span className="font-display font-black text-xl tracking-wider text-white">PAVO <span className="text-brand-blue">TWEAK</span></span>
+                            </a>
+                            <p className="text-brand-textMuted text-xs max-w-sm leading-relaxed">Professional performance configurations and utilities that bring esports stability and speed to standard Windows operating systems.</p>
+                        </div>
+
+                        <div className="md:col-span-6 grid grid-cols-2 gap-8">
+                            <div className="flex flex-col gap-3">
+                                <h5 className="font-display font-bold text-xs tracking-wider text-white uppercase">Community</h5>
+                                <a href="https://discord.gg/pavotweak" target="_blank" className="text-xs text-brand-textMuted hover:text-brand-blue transition-colors">Discord Server</a>
+                                <a href="mailto:support@pavotweak.com" className="text-xs text-brand-textMuted hover:text-brand-blue transition-colors">Email Help</a>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <h5 className="font-display font-bold text-xs tracking-wider text-white uppercase">Legal</h5>
+                                <button onClick={() => setLegalModal('terms')} className="text-xs text-brand-textMuted hover:text-brand-blue transition-colors text-left">Terms of Service</button>
+                                <button onClick={() => setLegalModal('privacy')} className="text-xs text-brand-textMuted hover:text-brand-blue transition-colors text-left">Privacy Policy</button>
+                                <button onClick={() => setLegalModal('refund')} className="text-xs text-brand-textMuted hover:text-brand-blue transition-colors text-left">Refund Policy</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-brand-textMuted">
+                        <p>&copy; 2026 Pavo Tweak. All rights reserved.</p>
+                        <p>Designed with premium Apple & Linear aesthetics.</p>
+                    </div>
+                </footer>
+            );
+        }
+
+        // ==========================================================================
+        // 12. TOAST COMPONENT
+        // ==========================================================================
+        function ToastList({ toasts, setToasts }) {
+            return (
+                <div className="fixed top-24 right-6 flex flex-col gap-3 z-[9999] pointer-events-none">
+                    {toasts.map(t => (
+                        <div key={t.id} className={`pointer-events-auto bg-brand-card/90 border border-brand-border p-4 rounded-xl shadow-2xl backdrop-blur-xl w-[320px] text-left border-l-4 flex flex-col gap-1.5 slide-in ${t.type === 'success' ? 'border-l-brand-green' : (t.type === 'error' ? 'border-l-brand-red' : 'border-l-brand-blue')}`}>
+                            <div className="flex justify-between items-center font-display font-bold text-xs">
+                                <span>{t.title}</span>
+                                <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-brand-textMuted hover:text-white font-sans text-sm focus:outline-none">&times;</button>
+                            </div>
+                            <p className="text-[11px] text-brand-textMuted leading-relaxed">{t.message}</p>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 13. CART DRAWER COMPONENT
+        // ==========================================================================
+        function CartDrawer({ isOpen, setIsOpen, cart, setCart, setCheckoutOpen }) {
+            const handleRemoveItem = (id) => {
+                const updated = cart.filter(item => item.id !== id);
+                setCart(updated);
+                db.set("pt_cart", updated);
+            };
+
+            const subtotal = cart.reduce((sum, item) => sum + item.price, 0);
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed top-0 left-0 w-full h-full bg-black/60 backdrop-blur-sm z-[1100] flex justify-end" onClick={() => setIsOpen(false)}>
+                    <div className="w-full max-w-[400px] h-full bg-brand-card border-l border-brand-border flex flex-col justify-between shadow-2xl slide-in-drawer" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-brand-border flex justify-between items-center">
+                            <h3 className="font-display font-black text-lg">Your Cart</h3>
+                            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/5 border border-transparent hover:border-brand-border rounded-lg text-brand-textMuted hover:text-white focus:outline-none">
+                                <Icon name="x" className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 text-left">
+                            {cart.length === 0 ? (
+                                <p className="text-brand-textMuted text-sm text-center mt-12">Your cart is currently empty.</p>
+                            ) : (
+                                cart.map((item, idx) => (
+                                    <div key={idx} className="bg-white/2 border border-brand-border p-4 rounded-xl flex gap-4 relative group">
+                                        <img src="product_box.png" alt={item.name} className="w-14 h-16 object-cover rounded-lg shadow-md" />
+                                        <div className="flex flex-col justify-center gap-1">
+                                            <span className="font-semibold text-xs text-white">{item.name}</span>
+                                            <span className="font-display font-black text-sm text-brand-blue">${item.price.toFixed(2)} USD</span>
+                                        </div>
+                                        <button onClick={() => handleRemoveItem(item.id)} className="absolute top-2 right-2 p-1.5 text-brand-textMuted hover:text-brand-red opacity-0 group-hover:opacity-100 transition-all focus:outline-none">
+                                            <Icon name="trash-2" className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="p-6 border-t border-brand-border bg-black/20 flex flex-col gap-5">
+                            <div className="flex justify-between items-center font-display font-black text-base">
+                                <span>Subtotal</span>
+                                <span className="text-brand-blue">${subtotal.toFixed(2)} USD</span>
+                            </div>
+                            <button 
+                                disabled={cart.length === 0} 
+                                onClick={() => { setIsOpen(false); setCheckoutOpen(true); }} 
+                                className="bg-brand-blue hover:bg-brand-blueHover disabled:bg-brand-textMuted/10 disabled:text-brand-textMuted/40 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl shadow-md hover:shadow-brand-blue/30 transition-all font-display tracking-wide text-center"
+                            >
+                                Proceed to Checkout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 14. CHECKOUT MODAL COMPONENT
+        // ==========================================================================
+        function CheckoutModal({ isOpen, setIsOpen, user, cart, setCart, setView, setAuthState, setVerifyEmailTarget, sendMockMail, verificationCodes, setVerificationCodes, triggerToast }) {
+            const [method, setMethod] = useState('ltc'); // 'ltc', 'paypal', 'btc', 'eth'
+            const [copied, setCopied] = useState(false);
+            const discordLink = "https://discord.gg/JjVG5V9K44";
+            const ltcAddress = "LTu1AGw1L8Lp3L1vY4t9CtfD6j3qVwRk7z";
+
+            const handleCopyAddress = () => {
+                navigator.clipboard.writeText(ltcAddress);
+                setCopied(true);
+                triggerToast("Address Copied", "Litecoin address copied to clipboard.", "success");
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed top-0 left-0 w-full h-full bg-black/85 backdrop-blur-md z-[1200] flex justify-center items-center p-6" onClick={() => setIsOpen(false)}>
+                    <div className="bg-brand-card border border-brand-border p-8 rounded-3xl w-full max-w-[800px] max-h-[90%] overflow-y-auto flex flex-col gap-6 shadow-2xl scale-in" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center border-b border-brand-border pb-4">
+                            <h3 className="font-display font-black text-xl">Secure Checkout</h3>
+                            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/5 border border-transparent hover:border-brand-border rounded-lg text-brand-textMuted hover:text-white focus:outline-none">
+                                <Icon name="x" className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+                            {/* Left column: payment methods selection & directions */}
+                            <div className="lg:col-span-7 flex flex-col gap-6">
+                                <div className="flex flex-col gap-3">
+                                    <h4 className="font-display font-bold text-xs text-brand-blue uppercase tracking-wider">Select Payment Method</h4>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {/* Litecoin */}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMethod('ltc')}
+                                            className={`p-4 rounded-xl border flex flex-col gap-1 items-start transition-all text-left focus:outline-none ${method === 'ltc' ? 'border-brand-blue bg-brand-blue/5' : 'border-brand-border bg-white/2 hover:border-white/10'}`}
+                                        >
+                                            <span className="font-bold text-sm text-white">Litecoin (LTC)</span>
+                                            <span className="text-[10px] text-brand-textMuted">Pay directly with crypto</span>
+                                        </button>
+
+                                        {/* PayPal */}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMethod('paypal')}
+                                            className={`p-4 rounded-xl border flex flex-col gap-1 items-start transition-all text-left focus:outline-none ${method === 'paypal' ? 'border-brand-blue bg-brand-blue/5' : 'border-brand-border bg-white/2 hover:border-white/10'}`}
+                                        >
+                                            <span className="font-bold text-sm text-white">PayPal</span>
+                                            <span className="text-[10px] text-brand-textMuted">Manual Discord purchase</span>
+                                        </button>
+
+                                        {/* Bitcoin */}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMethod('btc')}
+                                            className={`p-4 rounded-xl border flex flex-col gap-1 items-start transition-all text-left focus:outline-none ${method === 'btc' ? 'border-brand-blue bg-brand-blue/5' : 'border-brand-border bg-white/2 hover:border-white/10'}`}
+                                        >
+                                            <span className="font-bold text-sm text-white">Bitcoin (BTC)</span>
+                                            <span className="text-[10px] text-brand-textMuted">Manual Discord purchase</span>
+                                        </button>
+
+                                        {/* Ethereum */}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMethod('eth')}
+                                            className={`p-4 rounded-xl border flex flex-col gap-1 items-start transition-all text-left focus:outline-none ${method === 'eth' ? 'border-brand-blue bg-brand-blue/5' : 'border-brand-border bg-white/2 hover:border-white/10'}`}
+                                        >
+                                            <span className="font-bold text-sm text-white">Ethereum (ETH)</span>
+                                            <span className="text-[10px] text-brand-textMuted">Manual Discord purchase</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr className="border-brand-border/50" />
+
+                                {/* Payment Details Section */}
+                                {method === 'ltc' ? (
+                                    <div className="flex flex-col gap-4 scale-in">
+                                        <h5 className="font-display font-bold text-xs text-brand-blue uppercase tracking-wider">Litecoin Payment Instructions</h5>
+                                        <p className="text-xs text-brand-textMuted leading-relaxed">
+                                            To complete your purchase of Pavo Tweak Lifetime access via Litecoin (LTC), please send exactly **$8.00 USD** equivalent in LTC to the address below:
+                                        </p>
+                                        
+                                        <div className="bg-white/2 border border-brand-border p-4 rounded-xl flex flex-col gap-2">
+                                            <span className="text-[9px] font-bold text-brand-textMuted uppercase tracking-wider">Litecoin (LTC) Address</span>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    readOnly 
+                                                    value={ltcAddress} 
+                                                    className="bg-black/30 border border-brand-border rounded-lg px-3 py-2 text-xs font-mono text-white flex-grow select-all focus:outline-none" 
+                                                />
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleCopyAddress}
+                                                    className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold text-xs px-4 py-2 rounded-lg transition-all focus:outline-none"
+                                                >
+                                                    {copied ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white/2 border border-brand-border p-4 rounded-xl flex flex-col gap-3">
+                                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Step 2: Verify Your Payment</span>
+                                            <p className="text-xs text-brand-textMuted leading-relaxed">
+                                                Once you have broadcast the transaction, join our Discord server, open a billing support ticket, and share your TXID or payment proof. We will manually verify the payment and compile your key.
+                                            </p>
+                                            <a 
+                                                href={discordLink} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold py-3 rounded-xl transition-all font-display text-xs tracking-wide text-center mt-2 flex items-center justify-center gap-2"
+                                            >
+                                                <span>Join Discord to Verify</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-4 scale-in py-4 text-center items-center justify-center">
+                                        <div className="w-12 h-12 rounded-full bg-brand-blue/10 border border-brand-blue/25 flex items-center justify-center text-brand-blue mb-2">
+                                            <Icon name="message-square" className="w-6 h-6" />
+                                        </div>
+                                        <h5 className="font-display font-black text-base text-white">Manual Discord Purchase</h5>
+                                        <p className="text-xs text-brand-textMuted max-w-sm leading-relaxed mb-4">
+                                            PayPal, Bitcoin, and Ethereum payments are processed manually by our staff. Click the button below to join our Discord server and open a ticket.
+                                        </p>
+                                        <a 
+                                            href={discordLink} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="bg-brand-blue hover:bg-brand-blueHover text-white font-semibold px-8 py-4 rounded-xl transition-all font-display text-sm tracking-wide text-center flex items-center justify-center gap-2 shadow-lg shadow-brand-blue/20"
+                                        >
+                                            <span>Join Discord Server</span>
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right column: Order Summary */}
+                            <div className="lg:col-span-5 border-l border-brand-border/60 lg:pl-8 flex flex-col gap-5">
+                                <h4 className="font-display font-bold text-xs text-brand-blue uppercase tracking-wider">Order Summary</h4>
+                                <div className="bg-white/2 border border-brand-border p-4 rounded-xl flex gap-3.5">
+                                    <img src="product_box.png" alt="Pavo Tweak" className="w-12 h-14 object-cover rounded shadow" />
+                                    <div className="flex flex-col justify-center flex-grow">
+                                        <span className="font-semibold text-xs">Pavo Tweak Lifetime</span>
+                                        <span className="text-[10px] text-brand-textMuted">Quantity: 1</span>
+                                    </div>
+                                    <span className="font-display font-black text-sm text-brand-blue flex items-center">$8.00</span>
+                                </div>
+
+                                <hr className="border-brand-border/50" />
+                                
+                                <div className="flex justify-between items-center font-display font-black text-md">
+                                    <span>Total Due</span>
+                                    <span className="text-brand-blue">$8.00 USD</span>
+                                </div>
+
+                                <div className="bg-[#0b0c10] border border-brand-border/80 rounded-xl p-4 flex gap-3 text-xs leading-relaxed text-brand-textMuted items-start mt-2">
+                                    <Icon name="shield-check" className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
+                                    <span>Secure checkout. Direct payment instructions or server transitions are secured using standard encryptions.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 15. FLOATING EMAIL CLIENT COMPONENT
+        // ==========================================================================
+        function EmailClient({ isOpen, setIsOpen, unreadCount, mailList, setMailList, updateUnreadCount, activeMail, setActiveMail }) {
+            const handleExpandInbox = (e) => {
+                e.stopPropagation();
+                setIsOpen(!isOpen);
+                
+                // Clear unreads when expanding drawer
+                if (isOpen) {
+                    const readMails = mailList.map(m => ({ ...m, unread: false }));
+                    setMailList(readMails);
+                    db.set("pt_mails", readMails);
+                    updateUnreadCount(readMails);
+                }
+            };
+
+            const openMailDetail = (idx) => {
+                const mail = mailList[idx];
+                mail.unread = false;
+                const updated = [...mailList];
+                updated[idx] = mail;
+                setMailList(updated);
+                db.set("pt_mails", updated);
+                updateUnreadCount(updated);
+                setActiveMail(mail);
+            };
+
+            return (
+                <div className={`fixed bottom-0 right-6 w-full max-w-[420px] bg-[#0d0e12] border border-brand-border rounded-t-2xl shadow-2xl z-[1000] flex flex-col transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${isOpen ? 'h-[385px]' : 'h-[50px] overflow-hidden'}`}>
+                    <div onClick={handleExpandInbox} className="bg-[#111319] border-b border-brand-border px-4 py-3 flex justify-between items-center cursor-pointer rounded-t-2xl">
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="w-2.5 h-2.5 rounded-full bg-brand-blue animate-pulse shadow-md shadow-brand-blue/35" />
+                            <strong className="text-white">PavoMail Delivery node</strong>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {unreadCount > 0 && (
+                                <span className="bg-brand-red text-white text-[10px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 scale-in">{unreadCount}</span>
+                            )}
+                            <Icon name="chevron-up" className={`w-4 h-4 text-brand-textMuted transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                        </div>
+                    </div>
+
+                    {isOpen && (
+                        <div className="flex-grow overflow-hidden relative">
+                            {/* Inbox index */}
+                            {!activeMail ? (
+                                <div className="w-full h-full p-4 overflow-y-auto flex flex-col gap-2 text-left">
+                                    {mailList.length === 0 ? (
+                                        <p className="text-xs text-brand-textMuted text-center mt-20 leading-relaxed">No emails received. Complete a Registration or Request Password Recovery to trigger a simulated mail payload here.</p>
+                                    ) : (
+                                        mailList.map((m, idx) => (
+                                            <div key={idx} onClick={() => openMailDetail(idx)} className={`border border-brand-border rounded-lg p-3 hover:bg-white/4 cursor-pointer flex flex-col gap-1 transition-colors ${m.unread ? 'border-l-4 border-l-brand-blue bg-brand-blue/2' : 'bg-white/2'}`}>
+                                                <div className="flex justify-between items-center text-[10px] text-brand-textMuted">
+                                                    <span className="font-bold text-brand-blue">{m.from}</span>
+                                                    <span>{m.time}</span>
+                                                </div>
+                                                <span className="font-display font-bold text-xs text-white truncate">{m.subject}</span>
+                                                <span className="text-[11px] text-brand-textMuted truncate">Click to read details and copy code...</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            ) : (
+                                /* Mail detail */
+                                <div className="w-full h-full p-4 overflow-y-auto text-left flex flex-col gap-4">
+                                    <button onClick={() => setActiveMail(null)} className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:text-white transition-colors focus:outline-none">
+                                        <Icon name="arrow-left" className="w-3.5 h-3.5" /> Back to Inbox
+                                    </button>
+                                    <div className="text-[11px] border-b border-brand-border pb-3 flex flex-col gap-1 text-brand-textMuted leading-relaxed">
+                                        <p><strong>From:</strong> {activeMail.from}</p>
+                                        <p><strong>To:</strong> {activeMail.to}</p>
+                                        <p><strong>Subject:</strong> <span className="text-white font-semibold">{activeMail.subject}</span></p>
+                                        <p><strong>Time:</strong> {activeMail.time}</p>
+                                    </div>
+                                    <div className="email-body-markup text-xs text-brand-textMuted" dangerouslySetInnerHTML={{ __html: activeMail.body }} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==========================================================================
+        // 16. LEGAL DOCUMENTS MODAL COMPONENT
+        // ==========================================================================
+        function LegalModal({ type, setType }) {
+            if (!type) return null;
+
+            const content = {
+                terms: {
+                    title: "Terms of Service",
+                    body: `
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">1. Acceptance of Terms</h4>
+                        <p class="mb-4">By accessing Pavo Tweak website and downloading the software suite, you agree to comply with and be bound by these Terms of Service. These terms constitute a legally binding agreement between you and Pavo Tweak.</p>
+                        
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">2. License Grant</h4>
+                        <p class="mb-4">Pavo Tweak grants you a non-exclusive, non-transferable, revocable lifetime license to use the optimization software on your personal machines, subject to key verification checks.</p>
+                        
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">3. Misuse and Reverse Engineering</h4>
+                        <p class="mb-4">You may not modify, decompile, decrypt, disassemble or reverse engineer Pavo Tweak binaries. Any attempt to bypass licensing activation nodes or redistribute modified builds will result in immediate termination of license keys and user account bans.</p>
+                    `
+                },
+                privacy: {
+                    title: "Privacy Policy",
+                    body: `
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">1. Data Collection</h4>
+                        <p class="mb-4">Pavo Tweak does not collect or store personal logs, registry configurations, or web traffic details. Any profile adjustment and optimization command execution occurs locally on your machine.</p>
+                        
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">2. User Accounts</h4>
+                        <p class="mb-4">We hold your username, email, and password (in highly secured hashed format) to compile licenses, process downloads, and permit dashboard access. This data is never shared with third parties.</p>
+                        
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">3. Cookies</h4>
+                        <p class="mb-4">We use local storage values to maintain session configurations and cart state details to ensure proper UI performance.</p>
+                    `
+                },
+                refund: {
+                    title: "Refund Policy",
+                    body: `
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">1. Refund Policies</h4>
+                        <p class="mb-4">Due to the digital nature of lifetime software license keys, we generally do not offer refunds once a license key has been compiled and activated.</p>
+                        
+                        <h4 class="font-display font-bold text-white text-sm uppercase mt-4 mb-2">2. Exceptions</h4>
+                        <p class="mb-4">If you encounter severe hardware incompatibility issues that prevent Pavo Tweak from running altogether, contact support@pavotweak.com within 7 days of purchase. Our engineers will verify system crash logs and, if unresolved, execute a full refund transaction.</p>
+                    `
+                }
+            };
+
+            const doc = content[type];
+
+            return (
+                <div className="fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm z-[1300] flex justify-center items-center p-6" onClick={() => setType(null)}>
+                    <div className="bg-brand-card border border-brand-border p-8 rounded-2xl w-full max-w-[650px] max-h-[85%] overflow-y-auto flex flex-col gap-6 shadow-2xl scale-in text-left" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center border-b border-brand-border pb-4">
+                            <h3 className="font-display font-black text-xl">{doc.title}</h3>
+                            <button onClick={() => setType(null)} className="p-2 hover:bg-white/5 border border-transparent hover:border-brand-border rounded-lg text-brand-textMuted hover:text-white focus:outline-none">
+                                <Icon name="x" className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="text-xs text-brand-textMuted leading-relaxed" dangerouslySetInnerHTML={{ __html: doc.body }} />
+                    </div>
+                </div>
+            );
+        }
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
+    </script>
+</body>
+</html>

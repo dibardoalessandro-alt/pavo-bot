@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pavo Tweak – Interactive Showcase</title>
+    <!-- Google Fonts: Outfit for display, Inter for UI text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Interactive Background Spotlight Canvas -->
+    <canvas id="spotlight-canvas"></canvas>
+
+    <!-- FLOATING FPS OVERLAY (HUD) -->
+    <div id="hud-overlay" class="hud-window hidden">
+        <div class="hud-header">
+            <span class="hud-title">PAVO HUD OVERLAY</span>
+            <span class="hud-drag-handle">:::</span>
+        </div>
+        <div class="hud-body">
+            <div class="hud-stat">
+                <span class="hud-label">FPS</span>
+                <span id="hud-fps-val" class="hud-value accent-text">144</span>
+            </div>
+            <div class="hud-stat">
+                <span class="hud-label">CPU</span>
+                <span id="hud-cpu-val" class="hud-value">12%</span>
+            </div>
+            <div class="hud-stat">
+                <span class="hud-label">RAM</span>
+                <span id="hud-ram-val" class="hud-value">44%</span>
+            </div>
+            <div class="hud-stat">
+                <span class="hud-label">GPU Temp</span>
+                <span class="hud-value">62°C</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. LOGIN ACTIVATION SCREEN -->
+    <div id="login-screen" class="glass-panel">
+        <div class="login-container">
+            <div class="login-logo-row">
+                <div class="logo-box">
+                    <span class="logo-letter">P</span>
+                </div>
+                <div class="login-branding">
+                    <h1 class="brand-title">PAVO TWEAK</h1>
+                    <span class="brand-subtitle" data-key="login.subtitle">LICENSE ACTIVATION</span>
+                </div>
+            </div>
+            <hr class="separator">
+            <p class="login-desc" data-key="login.desc">Enter your license key to continue</p>
+            <div class="input-group">
+                <input type="text" id="license-key" placeholder="PAVO-XXXX-XXXX-XXXX" autocomplete="off">
+                <div id="login-error" class="error-msg hidden" data-key="login.error">Invalid license key. Try 'SHOWCASE'.</div>
+            </div>
+            <button id="btn-activate" class="premium-button">
+                <span id="btn-activate-text" data-key="login.activate">ACTIVATE LICENSE</span>
+                <div class="spinner hidden" id="login-spinner"></div>
+            </button>
+            <div class="demo-bypass">
+                <span data-key="login.bypass">Or click here for</span> <a href="#" id="link-bypass-demo" data-key="login.bypass.link">Instant Demo Access</a>
+            </div>
+            <div class="showcase-watermark-login">// WEB SHOWCASE STAGE - COMPILED BY LO</div>
+        </div>
+    </div>
+    <!-- 2. MAIN APPLICATION SCREEN -->
+    <div id="app-screen" class="glass-panel hidden">
+        <div class="window-border">
+            
+            <!-- Window Title Bar -->
+            <div id="title-bar">
+                <div class="app-info">
+                    <div class="app-logo-small">
+                        <img src="pavo_logo.png" alt="Pavo Tweak Logo">
+                    </div>
+                    <span class="app-title">Pavo Tweak</span>
+                    <span class="badge-premium">PREMIUM</span>
+                    <span class="badge-showcase">SHOWCASE</span>
+                </div>
+                <div class="window-controls">
+                    <button class="win-btn" id="btn-minimize"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2" fill="none"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+                    <button class="win-btn" id="btn-maximize"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="4" width="16" height="16" rx="1"></rect></svg></button>
+                    <button class="win-btn win-close" id="btn-close"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                </div>
+            </div>
+
+            <!-- Window Content Workspace -->
+            <div class="app-content-grid">
+                
+                <!-- SIDEBAR NAVIGATION -->
+                <aside class="sidebar" id="sidebar-container">
+                    <div class="admin-badge" id="admin-badge">
+                        <span class="admin-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></span>
+                        <span id="admin-badge-text" data-key="status.admin">ADMINISTRATOR MODE</span>
+                    </div>
+
+                    <div class="sidebar-buttons-wrapper">
+                        <!-- Neon sliding active indicator -->
+                        <div id="sidebar-indicator" class="sidebar-active-indicator">
+                            <div class="sidebar-active-indicator-accent"></div>
+                        </div>
+
+                        <div class="sidebar-category" id="lblCat1" data-key="cat.monitoring">MONITORING</div>
+                        <button class="sidebar-btn active" data-view="dashboard">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg></span><span class="btn-label" data-key="nav.dashboard">Dashboard</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="ai-optimizer">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span><span class="btn-label" data-key="nav.ai">Diagnostics &amp; AI</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="win-custom">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></span><span class="btn-label" data-key="nav.custom">Windows Custom</span>
+                        </button>
+
+                        <div class="sidebar-category" id="lblCat2" data-key="cat.tweaks">SYSTEM TWEAKS</div>
+                        <button class="sidebar-btn" data-view="gaming-hub">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M12 12h.01"></path><path d="M17 12h.01"></path><path d="M7 12h.01"></path></svg></span><span class="btn-label" data-key="nav.gaming">Gaming Hub</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="benchmarks">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></span><span class="btn-label" data-key="nav.benchmark">Benchmarks</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="ram-manager">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line></svg></span><span class="btn-label" data-key="nav.ram">RAM Manager</span>
+                        </button>
+
+                        <div class="sidebar-category" id="lblCat3" data-key="cat.storage">STORAGE &amp; RAM</div>
+                        <button class="sidebar-btn" data-view="driver-center">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></span><span class="btn-label" data-key="nav.driver">Driver Center</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="disk-tools">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg></span><span class="btn-label" data-key="nav.disk">Disk Tools</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="startup-apps">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.25-2.5 3.5-2.5 3.5s2.25-1 3.5-2.5M16.5 7.5L19 5m-14 14l1.5-1.5M18.5 2.5c-.75-.75-2.5-.5-4.5 1.5S9 9.5 9 9.5l3 3s5.5-3 7.5-5 2.25-3.75 1.5-4.5z"></path></svg></span><span class="btn-label" data-key="nav.startup">Startup Apps</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="restore">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></span><span class="btn-label" data-key="nav.restore">System Restore</span>
+                        </button>
+
+                        <div class="sidebar-category" id="lblCat4" data-key="cat.other">OTHER</div>
+                        <button class="sidebar-btn" data-view="marketplace">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg></span><span class="btn-label" data-key="nav.market">Marketplace</span>
+                        </button>
+                        <button class="sidebar-btn" data-view="settings">
+                            <span class="icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span><span class="btn-label" data-key="nav.settings">Settings</span>
+                        </button>
+                    </div>
+
+                    <div class="sidebar-footer">
+                        <button class="sidebar-btn discord-btn-sidebar" id="btn-join-discord">
+                            <span class="icon" style="color: #3B82F6;"><svg viewBox="0 0 127.14 96.36" width="14" height="14" fill="currentColor"><path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.88-.65,1.72-1.33,2.53-2a75.76,75.76,0,0,0,76.08,0c.81.71,1.65,1.39,2.53,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31.06-18.83C129.54,49.89,123.63,27,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.86,46,53.86,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.1,46,96.1,53,91,65.69,84.69,65.69Z"/></svg></span><span class="btn-label" data-key="nav.discord" style="color: #C8CEFF;">Discord Support</span>
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- MAIN WORKSPACE MAIN WRAPPER -->
+                <div class="app-main-layout">
+                    <!-- VIEWPORT PANELS CONTAINER -->
+                    <main class="viewport">
+                    
+                    <!-- 1. DASHBOARD VIEW -->
+                    <div id="view-dashboard" class="view-panel">
+                        <div class="dashboard-grid">
+                            
+                            <!-- Left Section (Score + Cards + Action Drawer) -->
+                            <div class="dash-left">
+                                <!-- Score Banner -->
+                                <div class="premium-card score-banner">
+                                    <div class="score-ring-container">
+                                        <svg class="score-ring" viewBox="0 0 100 100">
+                                            <circle class="ring-bg" cx="50" cy="50" r="40" stroke-width="8"/>
+                                            <circle class="ring-fill" id="score-ring-fill" cx="50" cy="50" r="40" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                                        </svg>
+                                        <div class="score-label" id="dashboard-score-val">0</div>
+                                    </div>
+                                    <div class="score-info">
+                                        <h2 data-key="dash.score.title">STATO DI OTTIMIZZAZIONE DEL PC</h2>
+                                        <p data-key="dash.score.desc">Punteggio 0-100 che rappresenta il livello di pulizia e configurazione ottimale del sistema.</p>
+                                    </div>
+                                    <div class="premium-tag">PREMIUM</div>
+                                </div>
+
+                                <!-- Cards Grid -->
+                                <div class="cards-grid">
+                                    <div class="premium-card interactive-card" data-drawer="health">
+                                        <div class="card-header">
+                                            <div class="card-icon health">🛡️</div>
+                                            <h3 data-key="dash.card.health">PC Health</h3>
+                                        </div>
+                                        <div class="card-status status-ok" id="card-health-status" data-key="status.done">Completato!</div>
+                                    </div>
+                                    <div class="premium-card interactive-card" data-drawer="startup">
+                                        <div class="card-header">
+                                            <div class="card-icon startup">🚀</div>
+                                            <h3 data-key="nav.startup">App di Avvio</h3>
+                                        </div>
+                                        <div class="card-status status-warn" id="card-startup-status">3 Rilevate</div>
+                                    </div>
+                                    <div class="premium-card interactive-card" data-drawer="storage">
+                                        <div class="card-header">
+                                            <div class="card-icon storage">💽</div>
+                                            <h3 data-key="dash.card.storage">Spazio Disco</h3>
+                                        </div>
+                                        <div class="card-status status-warn" id="card-storage-status">12.4 GB Temp</div>
+                                    </div>
+                                    <div class="premium-card interactive-card" data-drawer="ram">
+                                        <div class="card-header">
+                                            <div class="card-icon ram">🧠</div>
+                                            <h3 data-key="nav.ram">RAM Manager</h3>
+                                        </div>
+                                        <div class="card-status status-ok" id="card-ram-status">Ottimale</div>
+                                    </div>
+                                    <div class="premium-card interactive-card" data-drawer="gaming">
+                                        <div class="card-header">
+                                            <div class="card-icon gaming">🎮</div>
+                                            <h3 data-key="nav.gaming">Gaming Hub</h3>
+                                        </div>
+                                        <div class="card-status status-ok" id="card-gaming-status">Pronto</div>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Monitors -->
+                                <div class="premium-card quick-monitors">
+                                    <h3 class="section-title" data-key="dash.monitor.title">MONITOR LIVE HARDWARE</h3>
+                                    <div class="monitors-row">
+                                        <div class="monitor-bar-group">
+                                            <div class="bar-header">
+                                                <span data-key="dash.cpu">CPU</span>
+                                                <span id="mon-cpu-text">0%</span>
+                                            </div>
+                                            <div class="progress-bar-bg">
+                                                <div class="progress-bar-fill" id="mon-cpu-fill"></div>
+                                            </div>
+                                        </div>
+                                        <div class="monitor-bar-group">
+                                            <div class="bar-header">
+                                                <span data-key="dash.gpu">GPU</span>
+                                                <span id="mon-gpu-text">0%</span>
+                                            </div>
+                                            <div class="progress-bar-bg">
+                                                <div class="progress-bar-fill" id="mon-gpu-fill"></div>
+                                            </div>
+                                        </div>
+                                        <div class="monitor-bar-group">
+                                            <div class="bar-header">
+                                                <span data-key="dash.ram">RAM</span>
+                                                <span id="mon-ram-text">0%</span>
+                                            </div>
+                                            <div class="progress-bar-bg">
+                                                <div class="progress-bar-fill" id="mon-ram-fill"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Section (Widgets Panel) -->
+                            <div class="dash-right-widgets">
+                                <!-- Widget: Clock -->
+                                <div class="premium-card widget-card clock-widget">
+                                    <div id="widget-time">00:00:00</div>
+                                    <div id="widget-date">Sunday, 12 July 2026</div>
+                                </div>
+
+                                <!-- Widget: Weather -->
+                                <div class="premium-card widget-card weather-widget">
+                                    <div class="weather-row">
+                                        <span class="weather-icon">☀️</span>
+                                        <div class="weather-temp">
+                                            <span class="temp-num">24°C</span>
+                                            <span class="temp-desc" data-key="widget.weather.clear">Clear Sky</span>
+                                        </div>
+                                    </div>
+                                    <div class="weather-details">
+                                        <span>Hum: 45%</span>
+                                        <span>Wind: 12km/h</span>
+                                    </div>
+                                </div>
+
+                                <!-- Widget: Network Graph -->
+                                <div class="premium-card widget-card net-widget">
+                                    <div class="net-header">
+                                        <span class="widget-title" data-key="widget.net.title">NETWORK TRAFFIC</span>
+                                        <span id="net-traffic-text" class="accent-text">14.2 KB/s</span>
+                                    </div>
+                                    <canvas id="net-chart-canvas"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. AI OPTIMIZER VIEW -->
+                    <div id="view-ai-optimizer" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="ai.title">ANALISI AI HARDWARE</h2>
+                            <p data-key="ai.desc">Analizza il tuo hardware e suggerisce ottimizzazioni sicure specifiche per il tuo sistema.</p>
+                        </div>
+
+                        <!-- Scan Console Block -->
+                        <div class="premium-card ai-scan-card">
+                            <div class="ai-hardware-header">
+                                <div class="hw-spec-box">
+                                    <span class="hw-spec-title" data-key="ai.hardware.info">INFORMAZIONI HARDWARE</span>
+                                    <div class="specs-list">
+                                        <div class="spec-item"><strong>CPU:</strong> <span id="hw-cpu">Intel Core i9-14900K</span></div>
+                                        <div class="spec-item"><strong>GPU:</strong> <span id="hw-gpu">NVIDIA GeForce RTX 4090</span></div>
+                                        <div class="spec-item"><strong>RAM:</strong> <span id="hw-ram">32.0 GB DDR5 RAM</span></div>
+                                        <div class="spec-item"><strong>OS:</strong> <span>Windows 11 Professional</span></div>
+                                    </div>
+                                </div>
+                                <button class="premium-button" id="btn-ai-scan" data-key="ai.scan">Scansiona Hardware</button>
+                            </div>
+
+                            <div class="scan-console" id="ai-console">
+                                <div class="console-line text-muted">&gt; Ready for scan... Click "Scansiona Hardware" to start system telemetry analysis.</div>
+                            </div>
+                        </div>
+
+                        <!-- Suggestions Panel -->
+                        <div class="premium-card suggestions-card hidden" id="ai-suggestions-panel">
+                            <h3 class="section-title" data-key="ai.suggestions">Suggerimenti AI</h3>
+                            <div class="suggestions-list" id="suggestions-list">
+                                <!-- Dynamic insertions here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. WINDOWS CUSTOM VIEW -->
+                    <div id="view-win-custom" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.custom">Windows Custom</h2>
+                            <p data-key="custom.desc">Modifica l'interfaccia e il comportamento di Windows per aumentare le performance grafiche e di explorer.</p>
+                        </div>
+                        <div class="customization-columns">
+                            <div class="premium-card custom-group-card">
+                                <h3 class="section-title" data-key="custom.cat.taskbar">TASKBAR &amp; SISTEMA</h3>
+                                <div class="form-row">
+                                    <label data-key="custom.taskbar.align">Taskbar Alignment</label>
+                                    <select class="dark-select" id="sel-taskbar-align">
+                                        <option value="center" data-key="custom.val.center">Center</option>
+                                        <option value="left" data-key="custom.val.left">Left</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <label data-key="custom.search.mode">Search Mode</label>
+                                    <select class="dark-select" id="sel-search-mode">
+                                        <option value="icon" data-key="custom.val.icon">Icon Only</option>
+                                        <option value="box" data-key="custom.val.box">Search Box</option>
+                                        <option value="hidden" data-key="custom.val.hidden">Hidden</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <label data-key="custom.taskbar.trans">Taskbar Transparency</label>
+                                    <select class="dark-select" id="sel-taskbar-trans">
+                                        <option value="blur" data-key="custom.val.blur">Acrylic Blur</option>
+                                        <option value="transparent" data-key="custom.val.transparent">Transparent</option>
+                                        <option value="opaque" data-key="custom.val.opaque">Opaque</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <label data-key="custom.theme">System Theme</label>
+                                    <select class="dark-select" id="sel-system-theme">
+                                        <option value="dark" data-key="settings.theme.dark">Dark Theme</option>
+                                        <option value="light" data-key="custom.val.light">Light Theme</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="premium-card custom-group-card">
+                                <h3 class="section-title" data-key="custom.cat.explorer">EXPLORER &amp; REGISTRO</h3>
+                                <div class="checkbox-row">
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="chk-telemetry" checked>
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <div class="checkbox-details">
+                                        <span class="checkbox-label" data-key="custom.chk.telemetry">Disabilita Telemetria Windows</span>
+                                        <span class="checkbox-desc" data-key="custom.desc.telemetry">Rimuove tracker e report in background inviati a Microsoft.</span>
+                                    </div>
+                                </div>
+                                <div class="checkbox-row">
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="chk-cortana" checked>
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <div class="checkbox-details">
+                                        <span class="checkbox-label" data-key="custom.chk.cortana">Disabilita Cortana &amp; Bing Search</span>
+                                        <span class="checkbox-desc" data-key="custom.desc.cortana">Evita che l'indicizzazione interroghi internet ad ogni ricerca locale.</span>
+                                    </div>
+                                </div>
+                                <div class="checkbox-row">
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="chk-menu" checked>
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <div class="checkbox-details">
+                                        <span class="checkbox-label" data-key="custom.chk.menu">Classic Context Menu (Windows 10)</span>
+                                        <span class="checkbox-desc" data-key="custom.desc.menu">Forza il menu del tasto destro classico senza cliccare 'Mostra altre opzioni'.</span>
+                                    </div>
+                                </div>
+                                <button class="premium-button full-width" id="btn-restart-explorer" data-key="custom.btn.explorer">Riavvia Explorer</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. GAMING HUB VIEW -->
+                    <div id="view-gaming-hub" class="view-panel hidden">
+                        <div class="gaming-layout">
+                            <!-- Left Column (Library) -->
+                            <div class="gaming-main">
+                                <div class="premium-card game-library-card">
+                                    <h3 class="section-title" data-key="game.lib.title">Libreria Giochi Rilevati</h3>
+                                    
+                                    <div class="games-grid" id="games-grid-list">
+                                        <!-- Game Cards insert dynamically -->
+                                    </div>
+
+                                    <div class="library-actions">
+                                        <button class="premium-button secondary" id="btn-add-game" data-key="game.btn.add">Aggiungi Eseguibile (.exe)</button>
+                                        <button class="premium-button" id="btn-launch-game" data-key="game.btn.launch">Avvia Gioco Selezionato</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Column (HUD Config) -->
+                            <div class="gaming-sidebar-panel">
+                                <div class="premium-card gaming-options-card">
+                                    <h3 class="section-title" data-key="game.opts.title">OPZIONI GAMING HUB</h3>
+                                    
+                                    <div class="opts-group">
+                                        <h4 data-key="game.hud.title">Overlay Statistiche FPS</h4>
+                                        <button class="premium-button full-width" id="btn-toggle-hud" data-key="game.hud.btn">Abilita HUD Overlay</button>
+                                    </div>
+
+                                    <div class="opts-group">
+                                        <h4 data-key="game.power.title">Piano Energetico</h4>
+                                        <button class="premium-button full-width secondary" id="btn-power-plan" data-key="game.power.btn">Ripristina Bilanciato</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. DRIVER CENTER VIEW -->
+                    <div id="view-driver-center" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.driver">Driver Center</h2>
+                            <p data-key="driver.desc">Monitora i componenti hardware installati e scarica i driver ottimizzati per la latenza nei giochi.</p>
+                        </div>
+                        
+                        <div class="premium-card drivers-card">
+                            <div class="drivers-toolbar">
+                                <span class="drivers-count" id="drivers-status-text">Scanning required...</span>
+                                <button class="premium-button" id="btn-scan-drivers" data-key="btn.scan">Scansiona</button>
+                                <button class="premium-button secondary hidden" id="btn-update-drivers" data-key="btn.update">Aggiorna</button>
+                            </div>
+
+                            <div class="drivers-table-container">
+                                <table class="dark-table" id="drivers-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-key="driver.table.device">Device</th>
+                                            <th data-key="driver.table.current">Current Version</th>
+                                            <th data-key="driver.table.status">Status</th>
+                                            <th data-key="driver.table.latency">Game Latency Impact</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="drivers-list-body">
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted" data-key="driver.table.scanmsg">Click 'Scansiona' to search for device driver states.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6. BENCHMARKS VIEW -->
+                    <div id="view-benchmarks" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.benchmark">Benchmarks</h2>
+                            <p data-key="bench.desc">Stressa CPU e GPU misurando i fotogrammi generati al secondo (FPS) e calcola un report completo dell'hardware.</p>
+                        </div>
+
+                        <div class="benchmark-layout">
+                            <div class="premium-card bench-card">
+                                <div class="bench-control-bar">
+                                    <button class="premium-button" id="btn-run-benchmark" data-key="btn.start">Avvia</button>
+                                    <span class="bench-status-label" id="bench-state-text">Idle... Ready to begin diagnostic benchmark.</span>
+                                </div>
+                                <div class="bench-chart-container">
+                                    <canvas id="bench-canvas"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="premium-card bench-results-card">
+                                <h3 class="section-title" data-key="bench.results">REPORT RISULTATI</h3>
+                                <div class="results-stats">
+                                    <div class="result-stat">
+                                        <span class="stat-label">MAX FPS</span>
+                                        <span id="bench-max-fps" class="stat-value">0</span>
+                                    </div>
+                                    <div class="result-stat">
+                                        <span class="stat-label">AVG FPS</span>
+                                        <span id="bench-avg-fps" class="stat-value">0</span>
+                                    </div>
+                                    <div class="result-stat">
+                                        <span class="stat-label">1% LOW FPS</span>
+                                        <span id="bench-low-fps" class="stat-value">0</span>
+                                    </div>
+                                </div>
+                                <div class="results-hardware-summary">
+                                    <p><strong>CPU Score:</strong> <span id="bench-cpu-score">-</span></p>
+                                    <p><strong>GPU Score:</strong> <span id="bench-gpu-score">-</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 7. DISK TOOLS VIEW -->
+                    <div id="view-disk-tools" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.disk">Disk Tools</h2>
+                            <p data-key="disk.desc">Ottimizza le performance dell'Hard Disk o SSD e mantieni pulito il file system rimuovendo cache in eccesso.</p>
+                        </div>
+
+                        <div class="disk-grid">
+                            <div class="premium-card disk-tool-group">
+                                <h3 class="section-title" data-key="disk.tool.cleaner">PULITORE FILE SPAZZATURA</h3>
+                                <div class="cleaner-gauge-box">
+                                    <div class="gauge-value" id="cleaner-size-val">12.4</div>
+                                    <div class="gauge-unit">GB</div>
+                                    <span class="gauge-label" data-key="disk.cleaner.label">Total Cache Detected</span>
+                                </div>
+                                <div class="clean-items">
+                                    <div class="clean-item">
+                                        <span>Temp User Folder</span>
+                                        <strong>4.8 GB</strong>
+                                    </div>
+                                    <div class="clean-item">
+                                        <span>Windows Log Files</span>
+                                        <strong>1.2 GB</strong>
+                                    </div>
+                                    <div class="clean-item">
+                                        <span>Prefetch / Error Dumps</span>
+                                        <strong>6.4 GB</strong>
+                                    </div>
+                                </div>
+                                <button class="premium-button full-width" id="btn-clean-disk" data-key="btn.clean">Pulisci</button>
+                            </div>
+
+                            <div class="premium-card disk-tool-group">
+                                <h3 class="section-title" data-key="disk.tool.trim">SSD TRIM OPTIMIZATION</h3>
+                                <p class="tool-desc" data-key="disk.trim.desc">Invia il comando TRIM al controller flash per informarlo dei blocchi logici inutilizzati, mantenendo elevata la velocità di scrittura dell'SSD.</p>
+                                <div class="trim-target">
+                                    <span>Target Volume:</span>
+                                    <strong>C: (Solid State Drive)</strong>
+                                </div>
+                                <button class="premium-button full-width" id="btn-trim-disk" data-key="disk.trim.btn">Forza Comando TRIM</button>
+                                <div class="trim-console" id="trim-console-log">Ready...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 8. RAM MANAGER VIEW -->
+                    <div id="view-ram-manager" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.ram">RAM Manager</h2>
+                            <p data-key="ram.desc">Libera memoria fisica in background forzando lo svuotamento della cache di standby non allocata.</p>
+                        </div>
+
+                        <div class="ram-layout">
+                            <div class="premium-card ram-stats-card">
+                                <h3 class="section-title" data-key="ram.stats.title">ALLOCAZIONE MEMORIA</h3>
+                                <div class="ram-pie-chart-container">
+                                    <!-- Simple SVG pie chart representation -->
+                                    <svg class="ram-pie-chart" viewBox="0 0 100 100">
+                                        <!-- Active Ram (Reddish/Magenta) -->
+                                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#F43F5E" stroke-width="20" stroke-dasharray="251.2" stroke-dashoffset="100"/>
+                                        <!-- Cache Ram (Orange) -->
+                                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#F59E0B" stroke-width="20" stroke-dasharray="251.2" stroke-dashoffset="180" transform="rotate(215 50 50)"/>
+                                        <!-- Free Ram (Blue Accent) -->
+                                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#3B82F6" stroke-width="20" stroke-dasharray="251.2" stroke-dashoffset="220" transform="rotate(-40 50 50)"/>
+                                    </svg>
+                                    <div class="ram-pie-text">
+                                        <span id="ram-used-percent">44%</span>
+                                        <small data-key="dash.usage">Utilizzo</small>
+                                    </div>
+                                </div>
+
+                                <div class="ram-legend">
+                                    <div class="legend-item"><span class="legend-color used"></span><span data-key="ram.legend.active">Active:</span> <strong id="ram-active-val">14.1 GB</strong></div>
+                                    <div class="legend-item"><span class="legend-color cache"></span><span data-key="ram.legend.cache">Cache:</span> <strong id="ram-cache-val">8.2 GB</strong></div>
+                                    <div class="legend-item"><span class="legend-color free"></span><span data-key="dash.free">Libero:</span> <strong id="ram-free-val">9.7 GB</strong></div>
+                                </div>
+                            </div>
+
+                            <div class="premium-card ram-actions-card">
+                                <h3 class="section-title" data-key="ram.opts.title">AZIONI RAM</h3>
+                                <p class="tool-desc" data-key="ram.explain">Standby list cache di Windows viene costantemente riempita da app chiuse. Svuotare la cache velocizza i passaggi di memoria istantanei.</p>
+                                <div class="ram-stat-bar">
+                                    <span data-key="ram.standby.size">Standby Cache Size</span>
+                                    <strong id="ram-standby-val">4.2 GB</strong>
+                                </div>
+                                <button class="premium-button full-width" id="btn-clean-ram" data-key="ram.clean.btn">Ottimizza Memoria</button>
+                                <div id="ram-opt-toast" class="opt-result-msg hidden">Memory optimized successfully!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 9. STARTUP APPS VIEW -->
+                    <div id="view-startup-apps" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.startup">App di Avvio</h2>
+                            <p data-key="startup.desc">Gestisci i programmi che si caricano automaticamente all'avvio del computer per velocizzare i tempi di caricamento di Windows.</p>
+                        </div>
+
+                        <div class="premium-card startup-card">
+                            <table class="dark-table">
+                                <thead>
+                                    <tr>
+                                        <th data-key="startup.table.name">Application Name</th>
+                                        <th data-key="startup.table.publisher">Publisher</th>
+                                        <th data-key="startup.table.impact">Startup Impact</th>
+                                        <th data-key="driver.table.status">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="startup-apps-list">
+                                    <!-- Added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 10. SYSTEM RESTORE VIEW -->
+                    <div id="view-restore" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.restore">Ripristino</h2>
+                            <p data-key="restore.desc">Gestione dei punti di ripristino per ripristinare il registro di Windows allo stato precedente in caso di anomalie.</p>
+                        </div>
+
+                        <div class="restore-layout">
+                            <div class="premium-card restore-actions">
+                                <h3 class="section-title" data-key="restore.action.title">Backup e Ripristino</h3>
+                                <p class="tool-desc" data-key="restore.explain">Crea un backup prima di applicare i tweak avanzati della scheda custom o del marketplace.</p>
+                                <div class="restore-buttons">
+                                    <button class="premium-button" id="btn-create-restore" data-key="restore.btn.create">Crea Punto di Ripristino</button>
+                                    <button class="premium-button secondary" id="btn-rollback-tweaks" data-key="restore.btn.rollback">Ripristina Backup Precedente</button>
+                                </div>
+                                <div class="restore-console" id="restore-console-log">Ready...</div>
+                            </div>
+
+                            <div class="premium-card restore-history">
+                                <h3 class="section-title" data-key="restore.history.title">PUNTI DI RIPRISTINO ATTIVI</h3>
+                                <ul class="restore-list" id="restore-list-container">
+                                    <!-- Dynamic points -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 11. MARKETPLACE VIEW -->
+                    <div id="view-marketplace" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.market">Marketplace</h2>
+                            <p data-key="market.desc">Acquista moduli di ottimizzazione premium, configurazioni ed e-sport script realizzati dai nostri esperti partner.</p>
+                        </div>
+
+                        <div class="market-grid" id="market-items-grid">
+                            <!-- Dynamic marketplace insertion -->
+                        </div>
+                    </div>
+
+                    <!-- 12. SETTINGS VIEW -->
+                    <div id="view-settings" class="view-panel hidden">
+                        <div class="view-header">
+                            <h2 data-key="nav.settings">Impostazioni</h2>
+                            <p data-key="settings.desc">Personalizza il comportamento di Pavo Tweak, modifica il tema visivo, la lingua e la frequenza dei controlli.</p>
+                        </div>
+
+                        <div class="settings-layout">
+                            <div class="settings-nav">
+                                <button class="set-nav-btn active" data-setcat="general" data-key="settings.general">Generale</button>
+                                <button class="set-nav-btn" data-setcat="appearance" data-key="settings.appearance">Aspetto</button>
+                                <button class="set-nav-btn" data-setcat="performance" data-key="settings.performance">Performance</button>
+                                <button class="set-nav-btn" data-setcat="audio" data-key="settings.audio">Audio</button>
+                            </div>
+
+                            <div class="settings-content-pane">
+                                <!-- Group 1: General Settings -->
+                                <div class="set-pane" id="setpane-general">
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.startup">Avvia con Windows</span>
+                                            <span class="setting-desc">Avvia automaticamente Pavo Tweak in background all'avvio.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-startup" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.tray">Minimizza nel Tray</span>
+                                            <span class="setting-desc">Nascondi nella barra delle applicazioni invece di chiudere l'app.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-tray">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.updates">Controlla Aggiornamenti</span>
+                                            <span class="setting-desc">Verifica nuove definizioni di ottimizzazione sui server.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-updates" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.notifications">Notifiche</span>
+                                            <span class="setting-desc">Mostra notifiche desktop per ottimizzazioni automatiche completate.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-notifs" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.language">Lingua</span>
+                                            <span class="setting-desc">Seleziona la lingua per l'interfaccia dell'applicazione.</span>
+                                        </div>
+                                        <div class="lang-selector-buttons">
+                                            <button class="lang-btn active" id="btn-lang-en">🇬🇧 English</button>
+                                            <button class="lang-btn" id="btn-lang-it">🇮🇹 Italiano</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Group 2: Appearance Settings -->
+                                <div class="set-pane hidden" id="setpane-appearance">
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.accent">Colore Accento</span>
+                                            <span class="setting-desc">Modifica il colore primario dell'applicazione.</span>
+                                        </div>
+                                        <div class="accent-swatches">
+                                            <div class="swatch active" id="sw-blue" style="background-color: #3B82F6;" data-accent="#3B82F6"></div>
+                                            <div class="swatch" id="sw-purple" style="background-color: #7C5CFC;" data-accent="#7C5CFC"></div>
+                                            <div class="swatch" id="sw-cyan" style="background-color: #06B6D4;" data-accent="#06B6D4"></div>
+                                            <div class="swatch" id="sw-green" style="background-color: #10B981;" data-accent="#10B981"></div>
+                                            <div class="swatch" id="sw-orange" style="background-color: #F59E0B;" data-accent="#F59E0B"></div>
+                                            <div class="swatch" id="sw-red" style="background-color: #EF4444;" data-accent="#EF4444"></div>
+                                            <div class="swatch" id="sw-pink" style="background-color: #EC4899;" data-accent="#EC4899"></div>
+                                        </div>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.theme">Tema</span>
+                                            <span class="setting-desc">Seleziona lo stile di sfondo del pannello.</span>
+                                        </div>
+                                        <div class="theme-selector-buttons">
+                                            <button class="theme-btn active" id="btn-theme-dark" data-theme="dark" data-key="settings.theme.dark">Scuro</button>
+                                            <button class="theme-btn" id="btn-theme-soft" data-theme="soft" data-key="settings.theme.soft">Scuro Morbido</button>
+                                        </div>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.uiscale">Scala UI</span>
+                                            <span class="setting-desc">Modifica la dimensione della finestra di Pavo Tweak.</span>
+                                        </div>
+                                        <div class="slider-group">
+                                            <input type="range" id="slider-uiscale" min="80" max="110" value="100" class="dark-slider">
+                                            <span id="label-uiscale">100%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Group 3: Performance Settings -->
+                                <div class="set-pane hidden" id="setpane-performance">
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.animations">Qualità Animazioni</span>
+                                            <span class="setting-desc">Configura gli effetti visivi e la fluidità.</span>
+                                        </div>
+                                        <div class="anim-selector-buttons">
+                                            <button class="anim-btn" data-anim="low" data-key="settings.anim.low">Bassa</button>
+                                            <button class="anim-btn" data-anim="normal" data-key="settings.anim.normal">Normale</button>
+                                            <button class="anim-btn active" data-anim="high" data-key="settings.anim.high">Alta</button>
+                                        </div>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.hwaccel">Accelerazione Hardware</span>
+                                            <span class="setting-desc">Sfrutta la scheda video per accelerare l'interfaccia.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-hwaccel" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.gpurender">Rendering GPU</span>
+                                            <span class="setting-desc">Abilita il rendering grafico vettoriale avanzato.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-gpurender" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.memopt">Ottimizzazione Memoria</span>
+                                            <span class="setting-desc">Riduci il consumo di memoria allocata per l'app.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-memopt">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Group 4: Audio Settings -->
+                                <div class="set-pane hidden" id="setpane-audio">
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title" data-key="settings.audio">Effetti Sonori</span>
+                                            <span class="setting-desc">Riproduci toni audio durante i clic o le interazioni.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-audio-effects" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title">Volume Master</span>
+                                            <span class="setting-desc">Regola il volume degli effetti sonori integrati.</span>
+                                        </div>
+                                        <div class="slider-group">
+                                            <input type="range" id="slider-volume" min="0" max="100" value="50" class="dark-slider">
+                                            <span id="label-volume">50%</span>
+                                        </div>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title">Click Sound</span>
+                                            <span class="setting-desc">Suono alla pressione del tasto sinistro.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-click-sound" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-item">
+                                        <div class="setting-details">
+                                            <span class="setting-title">Hover Sound</span>
+                                            <span class="setting-desc">Suono al passaggio del mouse sui controlli interattivi.</span>
+                                        </div>
+                                        <label class="switch-container">
+                                            <input type="checkbox" id="set-hover-sound" checked>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </main>
+
+                <!-- PERSISTENT BOTTOM PAVO CONSOLE -->
+                <div class="pavo-console-box">
+                    <div class="pavo-console-header">
+                        <div class="console-controls">
+                            <span class="dot dot-red"></span>
+                            <span class="dot dot-yellow"></span>
+                            <span class="dot dot-green"></span>
+                        </div>
+                        <div class="console-title" data-key="console.title">REGISTRO OPERAZIONI — PAVO CONSOLE</div>
+                    </div>
+                    <div id="console-log-text" class="console-log-area"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DETAILS DRAWER (SLIDES IN FROM THE RIGHT) -->
+        <div id="details-drawer" class="drawer hidden">
+            <div class="drawer-header">
+                <h3 id="drawer-title">PC Health &amp; Security Details</h3>
+                <button id="btn-close-drawer" class="win-btn"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+            </div>
+            <div class="drawer-body">
+                <span class="drawer-status-badge" id="drawer-status">All systems green</span>
+                
+                <ul class="drawer-items-list" id="drawer-items-container">
+                    <!-- Loaded dynamically based on which card is clicked -->
+                </ul>
+            </div>
+            <div class="drawer-footer">
+                <button class="premium-button full-width" id="btn-drawer-fix" data-key="btn.optimize">Fix Issues</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCRIPT -->
+    <script src="app.js"></script>
+</body>
+</html>

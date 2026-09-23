@@ -1,0 +1,51 @@
+{
+  "guildId": "1532173407158800464",
+  "ticketCategoryId": "1532385488554430575",
+  "ticketLogChannelId": "1543205266290507816",
+  "transcriptChannelId": "1543205266290507816",
+  "staffRoles": {
+    "Senior Supporter": "1538244553637634118",
+    "Support Trainer": "1532475654992298235",
+    "COO": "1533103189925167134",
+    "Developer": "1532475374993281035",
+    "Management": "1532475540458442883",
+    "Founder": "1532475320240836818",
+    "Pavo": "1532384602205851749"
+  },
+  "managementRoles": [
+    "Management",
+    "Founder",
+    "Pavo"
+  ],
+  "staffHierarchy": [
+    "Pavo",
+    "Founder",
+    "Management",
+    "COO",
+    "Developer",
+    "Support Trainer",
+    "Senior Supporter"
+  ],
+  "paymentInfo": {
+    "paypal": "paypal.me/yourpaypallink",
+    "ltc": "LTC_WALLET_ADDRESS_HERE",
+    "boosts": "Boost the discord server and claim perks manually!"
+  },
+  "defaultCommissionPercentages": {
+    "Senior Supporter": 10,
+    "Support Trainer": 10,
+    "COO": 10,
+    "Developer": 10,
+    "Management": 10,
+    "Founder": 10,
+    "Pavo": 10
+  },
+  "embedColor": "#4f46e5",
+  "embedFooterText": "Pavo Tweak · Official Discord",
+  "giveawayLogChannelId": "1543205266290507816",
+  "publicUrl": "https://pavo-bot-1.onrender.com",
+  "oauthRedirectUri": "https://pavo-bot-1.onrender.com/oauth/callback",
+  "pavoPromoChannelId": "1546587816450859010",
+  "pavoCommandChannelId": "1546601794606731305",
+  "legitCheckChannelId": "1546615108325736558"
+}

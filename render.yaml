@@ -1,0 +1,25 @@
+services:
+  # Pavo Unified Suite (Discord Bot + License Backend)
+  # Uses exactly 1 Free instance (744h/month <= 750h limit) so it stays online 24/7 and never suspends!
+  - type: web
+    name: pavo-suite
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm run install-all
+    startCommand: node start-unified.js
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        value: 1543201517279117413
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000

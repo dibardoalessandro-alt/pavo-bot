@@ -1,0 +1,28 @@
+# Environment variables (contains secrets!)
+.env
+
+# Dependencies
+node_modules/
+
+# Database file (contains user data - back up separately!)
+pavo_database.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Screenshots and local files
+*.png
+*.jpg
+*.jpeg

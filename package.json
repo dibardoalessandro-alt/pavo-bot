@@ -1,0 +1,14 @@
+{
+  "name": "pavo-tweak-suite",
+  "version": "1.0.0",
+  "description": "Pavo Tweak Suite - Unified Backend and Discord Bot",
+  "main": "start-unified.js",
+  "scripts": {
+    "install-all": "cd backend && npm install && cd ../pavo-bot && npm install",
+    "postinstall": "cd backend && npm install && cd ../pavo-bot && npm install",
+    "start": "node start-unified.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

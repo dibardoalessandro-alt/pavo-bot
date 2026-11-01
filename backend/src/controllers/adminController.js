@@ -245,6 +245,32 @@ class AdminController {
       });
     }
   }
+  /**
+   * POST /api/admin/licenses/backup
+   */
+  async backup(req, res) {
+    try {
+      const result = licenseService.backupLicenses();
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('[ADMIN BACKUP ERROR]', err);
+      return res.status(500).json({ success: false, error: 'ServerError', message: err.message });
+    }
+  }
+
+  /**
+   * POST /api/admin/licenses/global-reset
+   */
+  async globalReset(req, res) {
+    try {
+      const { actor = 'admin', reason = 'GLOBAL_RESET_REVOCATION_MIGRATION', newGeneration } = req.body || {};
+      const result = licenseService.globalLicenseReset({ actor, reason, newGeneration });
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('[ADMIN GLOBAL RESET ERROR]', err);
+      return res.status(500).json({ success: false, error: 'ServerError', message: err.message });
+    }
+  }
 }
 
 const controller = new AdminController();
@@ -255,5 +281,7 @@ module.exports = {
   delete: controller.delete.bind(controller),
   resetHwid: controller.resetHwid.bind(controller),
   list: controller.list.bind(controller),
-  getOne: controller.getOne.bind(controller)
+  getOne: controller.getOne.bind(controller),
+  backup: controller.backup.bind(controller),
+  globalReset: controller.globalReset.bind(controller)
 };

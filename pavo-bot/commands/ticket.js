@@ -134,7 +134,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     .setFooter({ text: footerText, iconURL: guild.iconURL() || null })
     .setTimestamp();
 
-  // Buttons
+  // Buttons inside the active ticket
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket_claim')
@@ -143,12 +143,22 @@ async function createTicketChannel(interaction, config, productName, channelSuff
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('ticket_close')
-      .setLabel('Close Ticket')
+      .setLabel('Close')
       .setEmoji('🔒')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
+      .setCustomId('ticket_add_user')
+      .setLabel('Add User')
+      .setEmoji('➕')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('ticket_remove_user')
+      .setLabel('Remove User')
+      .setEmoji('➖')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId('ticket_purchase')
-      .setLabel('Purchase Completed')
+      .setLabel('Purchase')
       .setEmoji('💰')
       .setStyle(ButtonStyle.Success)
   );
@@ -329,49 +339,26 @@ module.exports = {
         components: [row],
         ephemeral: true
       });
-    } 
-    else if (product === 'orbs_pc') {
-      // 2. Orbs — PC -> Create ticket immediately
-      await interaction.reply({ content: '⏳ Creating your Orbs — PC ticket...', ephemeral: true });
+    } else {
+      const typeMap = {
+        general_support: { title: 'General Support', suffix: 'general' },
+        blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin' },
+        trading_issue: { title: 'Trading Issue', suffix: 'trading' },
+        '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1' },
+        key_license: { title: 'Key / License Support', suffix: 'license' },
+        report_issue: { title: 'Member Report', suffix: 'report' },
+        other_support: { title: 'General / Other Support', suffix: 'support' }
+      };
+
+      const selected = typeMap[product] || { title: 'Support Ticket', suffix: 'ticket' };
+      await interaction.reply({ content: `⏳ Creazione ticket **${selected.title}** in corso...`, ephemeral: true });
+
       try {
-        const ticketChannel = await createTicketChannel(interaction, config, 'Orbs — PC', 'Orbs-PC');
-        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
+        const ticketChannel = await createTicketChannel(interaction, config, selected.title, selected.suffix);
+        await interaction.editReply({ content: `✅ Ticket creato con successo: <#${ticketChannel.id}>` });
       } catch (err) {
-        console.error('Error creating Orbs PC ticket:', err);
-        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
-      }
-    } 
-    else if (product === 'orbs_mobile') {
-      // 3. Orbs — Mobile -> Create ticket immediately
-      await interaction.reply({ content: '⏳ Creating your Orbs — Mobile ticket...', ephemeral: true });
-      try {
-        const ticketChannel = await createTicketChannel(interaction, config, 'Orbs — Mobile', 'Orbs-Mobile');
-        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
-      } catch (err) {
-        console.error('Error creating Orbs Mobile ticket:', err);
-        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
-      }
-    }
-    else if (product === 'custom_bot') {
-      // Custom Discord Bot -> Create ticket immediately
-      await interaction.reply({ content: '⏳ Creating your Custom Discord Bot ticket...', ephemeral: true });
-      try {
-        const ticketChannel = await createTicketChannel(interaction, config, 'Custom Discord Bot', 'Custom-Bot');
-        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
-      } catch (err) {
-        console.error('Error creating Custom Discord Bot ticket:', err);
-        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
-      }
-    }
-    else if (product === 'other_support') {
-      // 4. Other / General Support -> Create ticket immediately
-      await interaction.reply({ content: '⏳ Creating your Support ticket...', ephemeral: true });
-      try {
-        const ticketChannel = await createTicketChannel(interaction, config, 'Other / General Support', 'support');
-        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
-      } catch (err) {
-        console.error('Error creating Support ticket:', err);
-        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
+        console.error('Error creating ticket:', err);
+        await interaction.editReply({ content: `❌ Impossibile creare il ticket: ${err.message}` });
       }
     }
   },
@@ -395,36 +382,51 @@ module.exports = {
         });
       }
 
-      // Show dropdown menu for product selections
+      // Show dropdown menu for support / ticket selections
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('ticket_select_product')
-        .setPlaceholder('Select a product...')
+        .setPlaceholder('Select Ticket Type / Seleziona Tipo di Ticket...')
         .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel('General Support')
+            .setValue('general_support')
+            .setDescription('Assicurati supporto generale o domande sul server')
+            .setEmoji('🛠️'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('BlockSpin Support')
+            .setValue('blockspin_support')
+            .setDescription('Supporto dedicato per BlockSpin / Visuals')
+            .setEmoji('🎮'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Trading Issue')
+            .setValue('trading_issue')
+            .setDescription('Problemi o richieste relative a scambi o trading')
+            .setEmoji('💰'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('1v1 Issue')
+            .setValue('1v1_issue')
+            .setDescription('Contestazioni o problematiche relative a match 1v1')
+            .setEmoji('⚔️'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Key / License')
+            .setValue('key_license')
+            .setDescription('Problemi con codici licenza, riscatto o attivazione')
+            .setEmoji('🔑'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Report')
+            .setValue('report_issue')
+            .setDescription('Segnala un utente o un comportamento scorretto')
+            .setEmoji('🚨'),
           new StringSelectMenuOptionBuilder()
             .setLabel('Pavo Tweak')
             .setValue('pavo_tweak')
-            .setDescription('Category: PC Optimization / FPS Tweak')
+            .setDescription('Acquisto o supporto per Pavo Tweak Suite (FPS / PC)')
             .setEmoji('⚡'),
           new StringSelectMenuOptionBuilder()
-            .setLabel('Orbs — PC')
-            .setValue('orbs_pc')
-            .setDescription('Category: Discord Tool')
-            .setEmoji('🖥️'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Orbs — Mobile')
-            .setValue('orbs_mobile')
-            .setDescription('Category: Discord Tool')
-            .setEmoji('📱'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Custom Discord Bot')
-            .setValue('custom_bot')
-            .setDescription('Category: Custom Bot Development & Hosting')
-            .setEmoji('🤖'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Other / Support')
+            .setLabel('Other')
             .setValue('other_support')
-            .setDescription('Ask general questions or open a ticket for other products.')
-            .setEmoji('❓')
+            .setDescription('Altro tipo di richiesta di assistenza')
+            .setEmoji('💡')
         );
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -522,6 +524,40 @@ module.exports = {
     // BUTTON: Close Ticket (Read-only status)
     else if (customId === 'ticket_close') {
       await this.handleCloseTicketAction(interaction, config, channel, member);
+    }
+
+    // BUTTON: Add User to Ticket
+    else if (customId === 'ticket_add_user') {
+      const modal = new ModalBuilder()
+        .setCustomId('ticket_add_user_modal')
+        .setTitle('Aggiungi Utente al Ticket');
+
+      const userInput = new TextInputBuilder()
+        .setCustomId('target_user_id')
+        .setLabel('ID o Menzione Utente')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Es: 123456789012345678')
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(userInput));
+      await interaction.showModal(modal);
+    }
+
+    // BUTTON: Remove User from Ticket
+    else if (customId === 'ticket_remove_user') {
+      const modal = new ModalBuilder()
+        .setCustomId('ticket_remove_user_modal')
+        .setTitle('Rimuovi Utente dal Ticket');
+
+      const userInput = new TextInputBuilder()
+        .setCustomId('target_user_id')
+        .setLabel('ID o Menzione Utente')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Es: 123456789012345678')
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(userInput));
+      await interaction.showModal(modal);
     }
 
     // BUTTON: Reopen Ticket
@@ -844,7 +880,41 @@ module.exports = {
       }
     }
 
-    // 2. VERIFIED PURCHASE RECORD MODAL
+    // 2. ADD USER MODAL
+    else if (customId === 'ticket_add_user_modal') {
+      await interaction.deferReply();
+      const rawUser = interaction.fields.getTextInputValue('target_user_id').replace(/[<@!>]/g, '').trim();
+      const targetMember = await interaction.guild.members.fetch(rawUser).catch(() => null);
+
+      if (!targetMember) {
+        return interaction.editReply({ content: '❌ Utente non trovato nel server. Inserisci un ID Discord valido.' });
+      }
+
+      await interaction.channel.permissionOverwrites.edit(targetMember.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        ReadMessageHistory: true,
+        AttachFiles: true
+      });
+
+      await interaction.editReply({ content: `➕ <@${targetMember.id}> è stato aggiunto a questo ticket con successo!` });
+    }
+
+    // 3. REMOVE USER MODAL
+    else if (customId === 'ticket_remove_user_modal') {
+      await interaction.deferReply();
+      const rawUser = interaction.fields.getTextInputValue('target_user_id').replace(/[<@!>]/g, '').trim();
+      const targetMember = await interaction.guild.members.fetch(rawUser).catch(() => null);
+
+      if (!targetMember) {
+        return interaction.editReply({ content: '❌ Utente non trovato.' });
+      }
+
+      await interaction.channel.permissionOverwrites.delete(targetMember.id);
+      await interaction.editReply({ content: `➖ <@${targetMember.id}> è stato rimosso da questo ticket.` });
+    }
+
+    // 4. VERIFIED PURCHASE RECORD MODAL
     else if (customId === 'ticket_purchase_modal') {
       await interaction.deferReply();
 

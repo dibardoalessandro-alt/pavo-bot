@@ -42,6 +42,22 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status);
     CREATE INDEX IF NOT EXISTS idx_licenses_discord ON licenses(discord_user_id);
     CREATE INDEX IF NOT EXISTS idx_licenses_hwid ON licenses(hwid);
+  `);
+
+  // Migration: Ensure generation column exists in licenses
+  try {
+    const cols = db.prepare("PRAGMA table_info(licenses)").all();
+    const hasGeneration = cols.some(c => c.name === 'generation');
+    if (!hasGeneration) {
+      db.exec("ALTER TABLE licenses ADD COLUMN generation INTEGER DEFAULT 1;");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_licenses_generation ON licenses(generation);");
+      console.log('[DATABASE] Added generation column to licenses schema.');
+    }
+  } catch (err) {
+    console.error('[DATABASE] Error verifying generation column:', err);
+  }
+
+  db.exec(`
 
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

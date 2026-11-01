@@ -1,145 +1,74 @@
-# 🤖 Pavo Bot
+# 🤖 Pavo Bot — Complete Suite
 
-A professional, high-performance Discord support ticket and sales logging system with commissions, staff statistics, and payment display. Designed specifically for **Pavo Tweak**.
-
----
-
-## 📁 Project Structure
-
-```
-pavo-bot/
-├── commands/
-│   ├── earnings.js      # /earnings, /setpercentage commands
-│   ├── giveaway.js      # /giveaway (create, end, cancel, reroll, list) commands & handlers
-│   ├── oauth.js         # /oauth (stats, user) commands
-│   ├── payment.js       # /payment command
-│   ├── sales.js         # /sales (stats, user, leaderboard) commands
-│   ├── staff.js         # /staff (list, info, promote, demote) commands
-│   └── ticket.js        # /ticket command, button/modal handlers
-├── .env                 # Environment variables for sensitive data
-├── .env.example         # Template for environment variables
-├── config.json          # Discord channel/role configurations
-├── database.js          # JSON database connection & persistence operations
-├── index.js             # Main bot loader, command router, and client setup
-├── oauthServer.js       # Discord OAuth2 verification server & web UI
-├── package.json         # Project metadata and dependencies
-└── README.md            # Comprehensive documentation
-```
+Il bot Discord definitivo per la community di **Pavo Tweak** e **BlockSpin**, equipaggiato con:
+1. **🔑 Key / License System** (Generazione, Riscatto, Revoca, Verifica, Scadenza)
+2. **💰 Economia Virtuale & Pavo Coins** (Saldi persistenti, Daily, Pagamenti, Classifiche)
+3. **🎰 Gambling & Giochi Virtuali** (Guess Game 1-50, Dice 1-6, Coinflip, Slots con moltiplicatori, High/Low, Blackjack interattivo)
+4. **🎫 Support Ticket System** (7 categorie, permessi privati, add/remove user, claim, chiusura, transcript)
+5. **👋 Welcome & Rules Acceptance System** (Regolamento bilingue EN/IT con bottone di verifica ruolo `Member`)
+6. **🛡️ Staff & Moderation System** (Warn, Warnings, Clear, Kick, Ban, Unban, Timeout, Untimeout, Lock, Unlock, Slowmode, Userinfo, Serverinfo)
+7. **🎮 BlockSpin 1v1 & Trading Area** (Canali dedicati e ruoli esport/gaming)
+8. **🎁 Giveaway System** (Timer persistenti in DB, autoroll, reroll)
+9. **🏆 Profile System** (Scheda giocatore con XP, livelli, statistiche vittorie, monete e ruoli)
+10. **💾 Database Persistence** (Salvataggio atomico permanente in JSON / SQLite)
 
 ---
 
-## 🛠️ Step 1: Create the Discord Bot Application
+## 📁 Comandi Slash Disponibili
 
-To host the bot, you must register it on the Discord Developer Portal:
+### 🔑 1. Licenze & Chiavi (`/key`)
+- `/key create <product> <duration> [quantity] [notes]` — Crea chiavi uniche (formato `PAVO-XXXX-XXXX-XXXX`)
+- `/key list [status] [product]` — Elenco e stato delle chiavi generate
+- `/key info <key>` — Dettagli completi, creatore e riscatto
+- `/key revoke <key> [reason]` — Revoca una chiave
+- `/key delete <key>` — Elimina una chiave dal database
+- `/key redeem <key>` — Riscatta la chiave per il proprio account Discord
+- `/key check <key>` — Controlla la validità senza riscattarla
 
-1. Visit the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Click **New Application** in the top right. Name it `Pavo Bot`.
-3. In the left sidebar, click **Bot**.
-4. Scroll down to **Privileged Gateway Intents** and enable the following:
-   * **Presence Intent**
-   * **Server Members Intent** (Crucial for `/staff list` to display staff directory)
-   * **Message Content Intent** (Crucial for transcript generation)
-5. Scroll up to the **Token** section and click **Reset Token**. Copy the token and save it securely.
+### 💰 2. Economia Pavo Coins
+- `/balance [utente]` — Controlla il saldo di Pavo Coins
+- `/daily` — Riscatta 500 monete gratis ogni 24 ore
+- `/pay <destinatario> <quantita>` — Invia monete ad altri utenti
+- `/leaderboard [tipo]` — Classifica per monete, vittorie o partite
 
----
+### 🎰 3. Giochi & Scommesse
+- `/guess <avversario> <round> <puntata>` — Sfida 1v1 all'Indovina il Numero (1-50 segreto, con indizi Alto/Basso e modali a turno)
+- `/dice <avversario> <round> <puntata>` — Sfida 1v1 ai Dadi (1-6 a turni con pulsante)
+- `/coinflip <quantita> <lato>` — Testa o Croce istantaneo
+- `/slots <quantita>` — Slot machine con jackpot 777 e combinazioni
+- `/highlow <quantita> <previsione>` — Prevedi se il numero sarà Più Alto o Più Basso
+- `/blackjack <quantita>` — Blackjack interattivo con Hit, Stand e Double Down
+- `/gamestats [utente]` — Statistiche complete e winrate
 
-## 🔗 Step 2: Add the Bot to Your Discord Server
+### 🛡️ 4. Moderazione & Staff
+- `/warn <utente> <motivo>` — Ammonisce un utente
+- `/warnings <utente>` — Storico ammonizioni
+- `/clear <quantita>` — Cancella fino a 100 messaggi
+- `/kick <utente> [motivo]` — Espelle un utente
+- `/ban <utente> [motivo]` — Banna permanentemente
+- `/unban <userid> [motivo]` — Sbanna tramite ID Discord
+- `/timeout <utente> <minuti> [motivo]` — Mette in timeout
+- `/untimeout <utente>` — Rimuove il timeout
+- `/lock` / `/unlock` — Blocca/sblocca la scrittura nel canale
+- `/slowmode <secondi>` — Imposta il rallentatore
+- `/userinfo` / `/serverinfo` — Informazioni dettagliate
 
-To invite the bot to your guild:
+### 🎫 5. Supporto Ticket
+- `/ticket close` — Chiude il ticket impostando i permessi di sola lettura
+- `/ticket delete` — Elimina definitivamente il canale
+- `/ticket reopen` — Riapre un ticket chiuso
+- Pulsanti interni: **Claim**, **Close**, **Add User**, **Remove User**, **Purchase Completed**
 
-1. In the left sidebar of the Developer Portal, click **OAuth2** -> **URL Generator**.
-2. Under **Scopes**, select `bot` and `applications.commands`.
-3. Under **Bot Permissions**, select:
-   * **Manage Channels** (To create/delete private ticket channels)
-   * **Manage Roles** (To promote/demote staff members)
-   * **View Channels** (To read messages for transcripts)
-   * **Send Messages** (To chat inside tickets)
-   * **Embed Links** (To send rich embeds)
-   * **Attach Files** (To send transcript files)
-   * **Read Message History** (To generate transcripts)
-4. Copy the generated **URL** at the bottom and open it in your browser.
-5. Select your target guild and authorize the bot.
-6. **IMPORTANT:** In your Server settings, drag the bot's custom integration role (named `Pavo Bot`) **above** all the staff roles you want it to manage (e.g. Senior Supporter, Support Trainer). If you don't do this, Discord will block the bot from assigning/removing those roles during promote/demote operations.
-
----
-
-## ⚙️ Step 3: Configuration & Tokens
-
-### 1. Bot Secrets (`.env`)
-Create a copy of `.env.example` named `.env` and paste your Bot Token:
-```env
-DISCORD_TOKEN=your_bot_token_here
-```
-
-### 2. Server IDs and Settings (`config.json`)
-Open `config.json` and configure your IDs:
-- **`guildId`**: The ID of your Discord Server. Putting it here registers slash commands instantly for testing.
-- **`ticketCategoryId`**: The category category ID where new ticket channels will be created.
-- **`ticketLogChannelId`**: The channel ID where closed ticket summaries and purchase records are logged.
-- **`transcriptChannelId`**: The channel ID where txt transcript files are stored (can be the same as your log channel).
-- **`staffRoles`**: Replace placeholder IDs with the actual Snowflake IDs for:
-  * **Senior Supporter**
-  * **Support Trainer**
-  * **COO**
-  * **Developer**
-  * **Management**
-  * **Founder**
-  * **Pavo**
-- **`paymentInfo`**: Update links and wallet addresses for LTC, PayPal, and Server Boost instructions.
-- **`defaultCommissionPercentages`**: Define default commission payout percentages for each role.
+### 🎮 6. Profilo & Utility
+- `/profile [utente]` — Scheda profilo giocatore con XP, livelli, monete e ruoli
+- `/setup` — Crea in automatico tutte le categorie, canali, ruoli, regole e pannelli ticket
 
 ---
 
-## 🚀 Step 4: Installation & Running
+## 🚀 Avvio Rapido
 
-Ensure you have **Node.js v16.9.0+** installed on your system.
+1. Per eseguire il setup del server (ruoli, canali, pannelli):  
+   👉 Doppio click su **`setup-server.bat`**
 
-1. Open your terminal in the `pavo-bot` directory.
-2. Install the necessary NPM dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the bot:
-   ```bash
-   npm start
-   ```
-
----
-
-## 🎮 Available Slash Commands
-
-| Command | Subcommands / Arguments | Description |
-|---|---|---|
-| `/ticket` | - | Opens a private support ticket for a user. |
-| `/staff` | `list` | Show a professional list of all staff members and their roles. |
-| | `info [user]` | Show statistics of a staff member (tickets, sales, earnings). |
-| | `promote <user> <role>` | Promotes a staff member (Authorized management only). |
-| | `demote <user> <role>` | Demotes a staff member (Authorized management only). |
-| `/sales` | `stats` | Display total manual sales statistics & revenue. |
-| | `user <user>` | Display sales generated by a specific staff member. |
-| | `leaderboard` | Show the staff sales leaderboard. |
-| `/payment` | - | Display official Pavo Tweak payment information. |
-| `/earnings` | `[user]` | View commission earnings for yourself or a specific staff member. |
-| `/setpercentage`| `<role> <percentage>` | Change commission percentages for roles (Management only). |
-| `/giveaway` | `create <prize> <duration> [winners] [max_participants] [require_oauth]` | Create an official Pavo giveaway with live counters & timers. |
-| | `end [giveaway_id]` | End an active giveaway early and pick random winner(s). |
-| | `cancel [giveaway_id]` | Cancel an active giveaway without selecting winners. |
-| | `reroll [giveaway_id] [winners]` | Select new winner(s) while excluding previous winners. |
-| | `list` | View all currently active giveaways and their end times. |
-| `/oauth` | `stats` | View verified user statistics (total, today, this week). |
-| | `user <user>` | Look up a user's Discord OAuth2 verification status. |
-
----
-
-## 🔐 Discord OAuth2 Verification System
-
-The bot features a built-in official Discord OAuth2 verification system and responsive web portal:
-
-1. In the [Discord Developer Portal](https://discord.com/developers/applications), select your application -> **OAuth2**.
-2. Under **Redirects**, add:
-   - `http://localhost:10000/oauth/callback` (Local Development)
-   - `https://your-domain.onrender.com/oauth/callback` (Production)
-3. Under **OAuth2 URL Generator**, scopes used: `identify` (strict minimum required).
-4. Fill in `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` in `.env`.
-5. Access the Pavo Verification Portal at `http://localhost:10000/` or `https://your-domain.onrender.com/`.
-
+2. Per avviare il bot:  
+   👉 Doppio click su **`start.bat`**

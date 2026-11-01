@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 const db = require('../database/db');
 const config = require('../config');
@@ -86,8 +88,8 @@ class LicenseService {
     const stmt = db.prepare(`
       INSERT INTO licenses (
         license_key, status, discord_user_id, discord_username,
-        created_at, expires_at, notes, max_devices, created_by
-      ) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?)
+        created_at, expires_at, notes, max_devices, created_by, generation
+      ) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -98,7 +100,8 @@ class LicenseService {
       expiresAt,
       notes || null,
       maxDevices || config.defaultMaxDevices,
-      createdBy || 'admin'
+      createdBy || 'admin',
+      config.licenseGeneration || 1
     );
 
     this.logAudit(key, 'LICENSE_CREATED', createdBy, null, null, { durationDays, expiresAt, discordUserId });
@@ -152,10 +155,25 @@ class LicenseService {
 
     // Check Revoked Status
     if (license.status === 'revoked') {
+      this.logAudit(cleanKey, 'VALIDATION_BLOCKED_REVOKED', 'client', hwid, ipAddress, { reason: license.ban_reason });
       return {
         valid: false,
         code: 'REVOKED',
-        message: 'This license has been revoked. Please contact support.'
+        message: 'This license has been revoked. All previous keys have been invalidated. Please obtain a newly issued key.',
+        reason: license.ban_reason || 'License globally revoked'
+      };
+    }
+
+    // Check License Generation / Version
+    if (license.generation !== null && license.generation !== undefined && license.generation < (config.licenseGeneration || 1)) {
+      this.logAudit(cleanKey, 'VALIDATION_BLOCKED_OLD_GENERATION', 'client', hwid, ipAddress, {
+        keyGeneration: license.generation,
+        requiredGeneration: config.licenseGeneration
+      });
+      return {
+        valid: false,
+        code: 'GENERATION_INVALID',
+        message: 'This license belongs to an older generation and has been invalidated. Please obtain a newly issued key.'
       };
     }
 
@@ -243,10 +261,24 @@ class LicenseService {
     }
 
     if (license.status === 'revoked') {
+      this.logAudit(cleanKey, 'ACTIVATION_BLOCKED_REVOKED', 'client', cleanHwid, ipAddress, { reason: license.ban_reason });
       return {
         valid: false,
         code: 'REVOKED',
-        message: 'This license has been revoked.'
+        message: 'This license has been revoked. All previous keys have been invalidated. Please obtain a newly issued key.',
+        reason: license.ban_reason || 'License globally revoked'
+      };
+    }
+
+    if (license.generation !== null && license.generation !== undefined && license.generation < (config.licenseGeneration || 1)) {
+      this.logAudit(cleanKey, 'ACTIVATION_BLOCKED_OLD_GENERATION', 'client', cleanHwid, ipAddress, {
+        keyGeneration: license.generation,
+        requiredGeneration: config.licenseGeneration
+      });
+      return {
+        valid: false,
+        code: 'GENERATION_INVALID',
+        message: 'This license belongs to an older generation and has been invalidated. Please obtain a newly issued key.'
       };
     }
 
@@ -455,6 +487,86 @@ class LicenseService {
         limit: parsedLimit,
         totalPages: Math.ceil(total / parsedLimit) || 1
       }
+    };
+  }
+
+  /**
+   * Create an automated timestamped backup of the licenses table and database
+   */
+  backupLicenses() {
+    const backupDir = path.resolve(__dirname, '../../data/backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const jsonBackupPath = path.join(backupDir, `licenses_backup_${timestamp}.json`);
+    const allLicenses = db.prepare('SELECT * FROM licenses').all();
+    fs.writeFileSync(jsonBackupPath, JSON.stringify(allLicenses, null, 2), 'utf8');
+
+    // Also backup raw db file if it exists
+    if (fs.existsSync(config.dbPath)) {
+      const dbBackupPath = path.join(backupDir, `licenses_db_${timestamp}.db`);
+      fs.copyFileSync(config.dbPath, dbBackupPath);
+    }
+
+    return {
+      success: true,
+      timestamp,
+      backupFile: jsonBackupPath,
+      totalLicenses: allLicenses.length
+    };
+  }
+
+  /**
+   * Controlled Global License Reset:
+   * 1. Backs up all license records.
+   * 2. Sets all existing licenses to 'revoked' status with reason.
+   * 3. Prevents authorization of old sessions and keys.
+   * 4. Logs audit entry.
+   */
+  globalLicenseReset({ actor = 'admin', reason = 'GLOBAL_RESET_REVOCATION_MIGRATION', newGeneration = null } = {}) {
+    // Step 1: Backup current records
+    const backupResult = this.backupLicenses();
+
+    // Step 2: Revoke all existing licenses that aren't already revoked
+    const stmt = db.prepare(`
+      UPDATE licenses 
+      SET status = 'revoked', 
+          ban_reason = ?, 
+          notes = CASE 
+            WHEN notes IS NULL OR notes = '' THEN '[GLOBAL_RESET_REVOKED]'
+            ELSE notes || ' [GLOBAL_RESET_REVOKED]'
+          END
+      WHERE status != 'revoked'
+    `);
+    const updateResult = stmt.run(reason);
+
+    // Step 3: Increment generation
+    const nextGen = newGeneration || (config.licenseGeneration + 1);
+
+    // Step 4: Audit Log
+    this.logAudit(
+      'GLOBAL_ALL',
+      'GLOBAL_LICENSE_RESET',
+      actor,
+      null,
+      null,
+      {
+        totalExisting: backupResult.totalLicenses,
+        keysRevoked: updateResult.changes,
+        backupFile: backupResult.backupFile,
+        newGeneration: nextGen,
+        reason
+      }
+    );
+
+    return {
+      success: true,
+      backupFile: backupResult.backupFile,
+      totalExisting: backupResult.totalLicenses,
+      keysRevoked: updateResult.changes,
+      newGeneration: nextGen,
+      message: `Global reset complete. Revoked ${updateResult.changes} active license(s). Backup saved.`
     };
   }
 }

@@ -25,6 +25,7 @@ const config = {
   // License settings
   defaultMaxDevices: parseInt(process.env.DEFAULT_MAX_DEVICES || '1', 10),
   heartbeatToleranceSeconds: parseInt(process.env.HEARTBEAT_TOLERANCE_SECONDS || '300', 10), // 5 min
+  licenseGeneration: parseInt(process.env.LICENSE_GENERATION || '1', 10),
 };
 
 module.exports = config;

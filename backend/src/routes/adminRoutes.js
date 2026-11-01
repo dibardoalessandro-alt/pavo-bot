@@ -14,6 +14,8 @@ router.post('/licenses/ban', adminController.ban);
 router.post('/licenses/unban', adminController.unban);
 router.post('/licenses/delete', adminController.delete);
 router.post('/licenses/reset-hwid', adminController.resetHwid);
+router.post('/licenses/backup', adminController.backup);
+router.post('/licenses/global-reset', adminController.globalReset);
 
 router.get('/licenses', adminController.list);
 router.get('/licenses/:license', adminController.getOne);

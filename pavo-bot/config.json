@@ -1,7 +1,7 @@
 {
-  "guildId": "1532173407158800464",
-  "ticketCategoryId": "1532385488554430575",
-  "ticketLogChannelId": "1543205266290507816",
+  "guildId": "1535328210005401721",
+  "ticketCategoryId": "1554856591239544913",
+  "ticketLogChannelId": "1554856607488155768",
   "transcriptChannelId": "1543205266290507816",
   "staffRoles": {
     "Senior Supporter": "1538244553637634118",
@@ -47,5 +47,10 @@
   "oauthRedirectUri": "https://pavo-bot-1.onrender.com/oauth/callback",
   "pavoPromoChannelId": "1546587816450859010",
   "pavoCommandChannelId": "1546601794606731305",
-  "legitCheckChannelId": "1546615108325736558"
+  "legitCheckChannelId": "1546615108325736558",
+  "staffLogChannelId": "1554853665230159945",
+  "botLogChannelId": "1554853667381710870",
+  "gameResultsChannelId": "1554856588169453568",
+  "welcomeChannelId": "1554856579478593537",
+  "memberRoleId": "1554853604584853596"
 }

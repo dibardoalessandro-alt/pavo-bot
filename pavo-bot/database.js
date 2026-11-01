@@ -11,7 +11,15 @@ let dbData = {
   commission_percentages: {},
   giveaways: {},
   oauth_users: {},
-  oauth_states: {}
+  oauth_states: {},
+  licenses: {},
+  balances: {},
+  transactions: [],
+  gamestats: {},
+  warnings: [],
+  rule_acceptances: {},
+  profiles: {},
+  server_config: {}
 };
 
 // Safe JSON write
@@ -37,6 +45,14 @@ async function initDatabase() {
       if (!dbData.giveaways) dbData.giveaways = {};
       if (!dbData.oauth_users) dbData.oauth_users = {};
       if (!dbData.oauth_states) dbData.oauth_states = {};
+      if (!dbData.licenses) dbData.licenses = {};
+      if (!dbData.balances) dbData.balances = {};
+      if (!dbData.transactions) dbData.transactions = [];
+      if (!dbData.gamestats) dbData.gamestats = {};
+      if (!dbData.warnings) dbData.warnings = [];
+      if (!dbData.rule_acceptances) dbData.rule_acceptances = {};
+      if (!dbData.profiles) dbData.profiles = {};
+      if (!dbData.server_config) dbData.server_config = {};
       console.log(`✅ Loaded existing database from: ${dbPath}`);
     } catch (err) {
       console.error('⚠️ Database file was corrupted or unreadable. Reinitializing...', err);
@@ -582,6 +598,437 @@ async function castLegitCheckVote(userId, voteType) {
   };
 }
 
+// ============================================
+// KEY / LICENSE SYSTEM PERSISTENCE
+// ============================================
+
+function generateKeyString(prefix = 'PAVO') {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const block = () => Array.from({ length: 4 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+  return `${prefix}-${block()}-${block()}-${block()}`;
+}
+
+async function createKey(data) {
+  const now = new Date();
+  const keyStr = data.key || generateKeyString(data.prefix || 'PAVO');
+
+  let expiresAt = null;
+  let durationDays = null;
+
+  if (data.duration === 'lifetime') {
+    expiresAt = null;
+    durationDays = null;
+  } else if (data.duration === '30d') {
+    durationDays = 30;
+    expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  } else if (data.duration === '7d') {
+    durationDays = 7;
+    expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  } else if (data.durationDays) {
+    durationDays = Number(data.durationDays);
+    expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const licenseRecord = {
+    key: keyStr,
+    product: data.product || 'BlockSpin',
+    duration: data.duration || 'lifetime',
+    durationDays: durationDays,
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt,
+    createdBy: data.createdBy || 'System',
+    creatorTag: data.creatorTag || 'Staff',
+    redeemedBy: null,
+    redeemerTag: null,
+    redeemedAt: null,
+    revokedBy: null,
+    revocationReason: null,
+    status: 'ACTIVE', // ACTIVE, REDEEMED, EXPIRED, REVOKED
+    notes: data.notes || ''
+  };
+
+  dbData.licenses[keyStr] = licenseRecord;
+  save();
+  return licenseRecord;
+}
+
+async function createMultipleKeys(product, duration, quantity, createdBy, creatorTag, notes) {
+  const keys = [];
+  for (let i = 0; i < quantity; i++) {
+    const key = await createKey({ product, duration, createdBy, creatorTag, notes });
+    keys.push(key);
+  }
+  return keys;
+}
+
+async function getKey(key) {
+  if (!key) return null;
+  const k = key.trim().toUpperCase();
+  const record = dbData.licenses[k];
+  if (!record) return null;
+
+  // Check if active key has expired
+  if (record.status === 'ACTIVE' && record.expiresAt) {
+    if (new Date(record.expiresAt) < new Date()) {
+      record.status = 'EXPIRED';
+      save();
+    }
+  }
+
+  return record;
+}
+
+async function getAllKeys(filter = {}) {
+  let list = Object.values(dbData.licenses || {});
+  
+  if (filter.status) {
+    list = list.filter(k => k.status.toUpperCase() === filter.status.toUpperCase());
+  }
+  if (filter.product) {
+    list = list.filter(k => k.product.toLowerCase().includes(filter.product.toLowerCase()));
+  }
+  if (filter.userId) {
+    list = list.filter(k => k.redeemedBy === filter.userId || k.createdBy === filter.userId);
+  }
+
+  return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+async function redeemKey(keyStr, userId, userTag) {
+  const record = await getKey(keyStr);
+  if (!record) return { success: false, reason: 'NOT_FOUND' };
+  if (record.status === 'REVOKED') return { success: false, reason: 'REVOKED' };
+  if (record.status === 'REDEEMED') return { success: false, reason: 'ALREADY_REDEEMED', redeemedBy: record.redeemedBy, redeemedAt: record.redeemedAt };
+  if (record.status === 'EXPIRED') return { success: false, reason: 'EXPIRED' };
+
+  // Update status
+  const now = new Date();
+  record.status = 'REDEEMED';
+  record.redeemedBy = userId;
+  record.redeemerTag = userTag;
+  record.redeemedAt = now.toISOString();
+
+  // If duration is timed from redemption date
+  if (record.durationDays && !record.expiresAt) {
+    record.expiresAt = new Date(now.getTime() + record.durationDays * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  save();
+  return { success: true, license: record };
+}
+
+async function revokeKey(keyStr, revokedBy, reason = 'Revoked by Staff') {
+  const record = await getKey(keyStr);
+  if (!record) return { success: false, reason: 'NOT_FOUND' };
+
+  record.status = 'REVOKED';
+  record.revokedBy = revokedBy;
+  record.revocationReason = reason;
+  record.revokedAt = new Date().toISOString();
+  save();
+  return { success: true, license: record };
+}
+
+async function deleteKey(keyStr) {
+  const k = keyStr.trim().toUpperCase();
+  if (dbData.licenses[k]) {
+    delete dbData.licenses[k];
+    save();
+    return true;
+  }
+  return false;
+}
+
+// ============================================
+// VIRTUAL CURRENCY (PAVO COINS) & ECONOMY
+// ============================================
+
+async function getBalance(userId) {
+  if (!dbData.balances[userId]) {
+    dbData.balances[userId] = {
+      userId,
+      coins: 500, // Starting balance
+      bank: 0,
+      lastDaily: null,
+      createdAt: new Date().toISOString()
+    };
+    save();
+  }
+  return dbData.balances[userId];
+}
+
+async function addBalance(userId, amount, reason = 'Reward', txType = 'EARN') {
+  const userBal = await getBalance(userId);
+  const qty = Math.max(0, Math.floor(Number(amount) || 0));
+  userBal.coins += qty;
+  userBal.updatedAt = new Date().toISOString();
+
+  // Record transaction
+  dbData.transactions.push({
+    id: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    userId,
+    type: txType,
+    amount: qty,
+    balanceAfter: userBal.coins,
+    reason,
+    timestamp: new Date().toISOString()
+  });
+
+  save();
+  return userBal.coins;
+}
+
+async function removeBalance(userId, amount, reason = 'Bet/Payment', txType = 'SPEND') {
+  const userBal = await getBalance(userId);
+  const qty = Math.max(0, Math.floor(Number(amount) || 0));
+  
+  if (userBal.coins < qty) {
+    return { success: false, currentBalance: userBal.coins, required: qty };
+  }
+
+  userBal.coins -= qty;
+  userBal.updatedAt = new Date().toISOString();
+
+  dbData.transactions.push({
+    id: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    userId,
+    type: txType,
+    amount: -qty,
+    balanceAfter: userBal.coins,
+    reason,
+    timestamp: new Date().toISOString()
+  });
+
+  save();
+  return { success: true, newBalance: userBal.coins };
+}
+
+async function transferCoins(fromUserId, toUserId, amount, reason = 'User Transfer') {
+  const qty = Math.max(1, Math.floor(Number(amount) || 0));
+  const senderBal = await getBalance(fromUserId);
+
+  if (senderBal.coins < qty) {
+    return { success: false, reason: 'INSUFFICIENT_FUNDS', currentBalance: senderBal.coins };
+  }
+
+  const senderRemove = await removeBalance(fromUserId, qty, `Transfer to ${toUserId}: ${reason}`, 'TRANSFER_OUT');
+  if (!senderRemove.success) return senderRemove;
+
+  const receiverCoins = await addBalance(toUserId, qty, `Transfer from ${fromUserId}: ${reason}`, 'TRANSFER_IN');
+
+  return {
+    success: true,
+    amount: qty,
+    senderNewBalance: senderRemove.newBalance,
+    receiverNewBalance: receiverCoins
+  };
+}
+
+async function claimDaily(userId, rewardAmount = 500) {
+  const userBal = await getBalance(userId);
+  const now = Date.now();
+  const cooldownMs = 24 * 60 * 60 * 1000;
+
+  if (userBal.lastDaily) {
+    const lastClaim = new Date(userBal.lastDaily).getTime();
+    if (now - lastClaim < cooldownMs) {
+      const remainingMs = cooldownMs - (now - lastClaim);
+      return { success: false, cooldownRemainingMs: remainingMs };
+    }
+  }
+
+  userBal.coins += rewardAmount;
+  userBal.lastDaily = new Date(now).toISOString();
+  userBal.updatedAt = new Date(now).toISOString();
+
+  dbData.transactions.push({
+    id: `TX-DAILY-${now}`,
+    userId,
+    type: 'DAILY_REWARD',
+    amount: rewardAmount,
+    balanceAfter: userBal.coins,
+    reason: 'Daily Coins Claim',
+    timestamp: new Date(now).toISOString()
+  });
+
+  save();
+  return { success: true, reward: rewardAmount, newBalance: userBal.coins };
+}
+
+async function getEconomyLeaderboard(limit = 10) {
+  const users = Object.values(dbData.balances || {});
+  return users
+    .sort((a, b) => b.coins - a.coins)
+    .slice(0, limit);
+}
+
+// ============================================
+// GAMBLING STATISTICS & RECORDING
+// ============================================
+
+async function getGameStats(userId) {
+  if (!dbData.gamestats[userId]) {
+    dbData.gamestats[userId] = {
+      userId,
+      totalGames: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      coinsWon: 0,
+      coinsLost: 0,
+      guessWins: 0,
+      diceWins: 0,
+      slotsWins: 0,
+      coinflipWins: 0,
+      blackjackWins: 0,
+      highlowWins: 0,
+      lastPlayed: null
+    };
+    save();
+  }
+  return dbData.gamestats[userId];
+}
+
+async function recordGameResult(data) {
+  const { userId, gameType, outcome, betAmount = 0, payout = 0, opponentId = null } = data;
+  const stats = await getGameStats(userId);
+
+  stats.totalGames += 1;
+  stats.lastPlayed = new Date().toISOString();
+
+  if (outcome === 'WIN') {
+    stats.wins += 1;
+    const profit = Math.max(0, payout - betAmount);
+    stats.coinsWon += profit;
+
+    if (gameType === 'guess') stats.guessWins += 1;
+    if (gameType === 'dice') stats.diceWins += 1;
+    if (gameType === 'slots') stats.slotsWins += 1;
+    if (gameType === 'coinflip') stats.coinflipWins += 1;
+    if (gameType === 'blackjack') stats.blackjackWins += 1;
+    if (gameType === 'highlow') stats.highlowWins += 1;
+  } else if (outcome === 'LOSS') {
+    stats.losses += 1;
+    stats.coinsLost += betAmount;
+  } else if (outcome === 'DRAW' || outcome === 'TIE') {
+    stats.draws += 1;
+  }
+
+  save();
+  return stats;
+}
+
+async function getGamesLeaderboard(type = 'wins', limit = 10) {
+  const allStats = Object.values(dbData.gamestats || {});
+  if (type === 'coins') {
+    return allStats.sort((a, b) => (b.coinsWon - b.coinsLost) - (a.coinsWon - a.coinsLost)).slice(0, limit);
+  } else if (type === 'games') {
+    return allStats.sort((a, b) => b.totalGames - a.totalGames).slice(0, limit);
+  } else {
+    return allStats.sort((a, b) => b.wins - a.wins).slice(0, limit);
+  }
+}
+
+// ============================================
+// WARNINGS & MODERATION PERSISTENCE
+// ============================================
+
+async function addWarning(userId, moderatorId, reason = 'No reason provided') {
+  const warning = {
+    id: `WARN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    userId,
+    moderatorId,
+    reason,
+    timestamp: new Date().toISOString()
+  };
+
+  dbData.warnings.push(warning);
+  save();
+  return warning;
+}
+
+async function getWarnings(userId) {
+  return (dbData.warnings || []).filter(w => w.userId === userId);
+}
+
+async function clearWarnings(userId) {
+  const countBefore = (dbData.warnings || []).length;
+  dbData.warnings = (dbData.warnings || []).filter(w => w.userId !== userId);
+  save();
+  return countBefore - dbData.warnings.length;
+}
+
+// ============================================
+// RULE ACCEPTANCE & PROFILE PROGRESSION
+// ============================================
+
+async function recordRuleAcceptance(userId, userTag) {
+  if (dbData.rule_acceptances[userId]) {
+    return { alreadyAccepted: true, acceptedAt: dbData.rule_acceptances[userId].acceptedAt };
+  }
+
+  dbData.rule_acceptances[userId] = {
+    userId,
+    userTag,
+    acceptedAt: new Date().toISOString()
+  };
+  save();
+  return { alreadyAccepted: false, acceptedAt: dbData.rule_acceptances[userId].acceptedAt };
+}
+
+async function hasAcceptedRules(userId) {
+  return Boolean(dbData.rule_acceptances && dbData.rule_acceptances[userId]);
+}
+
+async function addXp(userId, amount = 10) {
+  if (!dbData.profiles[userId]) {
+    dbData.profiles[userId] = {
+      userId,
+      xp: 0,
+      level: 1,
+      lastActive: new Date().toISOString()
+    };
+  }
+
+  const p = dbData.profiles[userId];
+  p.xp += amount;
+  
+  // Calculate level: Level = floor(sqrt(xp / 100)) + 1
+  const newLevel = Math.floor(Math.sqrt(p.xp / 100)) + 1;
+  const leveledUp = newLevel > p.level;
+  p.level = newLevel;
+  p.lastActive = new Date().toISOString();
+
+  save();
+  return { xp: p.xp, level: p.level, leveledUp };
+}
+
+async function getUserProfile(userId) {
+  const bal = await getBalance(userId);
+  const stats = await getGameStats(userId);
+  const warnings = await getWarnings(userId);
+  const accepted = await hasAcceptedRules(userId);
+
+  if (!dbData.profiles[userId]) {
+    dbData.profiles[userId] = {
+      userId,
+      xp: 50,
+      level: 1,
+      lastActive: new Date().toISOString()
+    };
+    save();
+  }
+
+  return {
+    userId,
+    balance: bal.coins,
+    stats,
+    warningsCount: warnings.length,
+    rulesAccepted: accepted,
+    profile: dbData.profiles[userId]
+  };
+}
+
 module.exports = {
   initDatabase,
   ensureStaffExists,
@@ -618,5 +1065,33 @@ module.exports = {
   consumeOAuthState,
   getLegitCheckData,
   setLegitCheckMessage,
-  castLegitCheckVote
+  castLegitCheckVote,
+  // Key / License system
+  createKey,
+  createMultipleKeys,
+  getKey,
+  getAllKeys,
+  redeemKey,
+  revokeKey,
+  deleteKey,
+  // Virtual Currency / Economy
+  getBalance,
+  addBalance,
+  removeBalance,
+  transferCoins,
+  claimDaily,
+  getEconomyLeaderboard,
+  // Gambling stats
+  getGameStats,
+  recordGameResult,
+  getGamesLeaderboard,
+  // Moderation
+  addWarning,
+  getWarnings,
+  clearWarnings,
+  // Rules & Profiles
+  recordRuleAcceptance,
+  hasAcceptedRules,
+  addXp,
+  getUserProfile
 };

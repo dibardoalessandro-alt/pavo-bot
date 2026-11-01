@@ -21,6 +21,16 @@ const pavoBoosterCmd = require('./commands/pavoBooster');
 const boosterApi = require('./services/boosterApi');
 const OAuthServer = require('./oauthServer');
 
+// New System Commands
+const keyCmd = require('./commands/key');
+const economyCmd = require('./commands/economy');
+const gamblingCmd = require('./commands/gambling');
+const moderationCmd = require('./commands/moderation');
+const profileCmd = require('./commands/profile');
+const setupCmd = require('./commands/setup');
+const rulesCmd = require('./commands/rules');
+const { handleGameInteraction, handleGuessModalSubmit } = require('./services/gameInteractions');
+
 // Clean and validate DISCORD_TOKEN from environment
 const rawToken = process.env.DISCORD_TOKEN || '';
 const botToken = rawToken.trim().replace(/^["']|["']$/g, '');
@@ -37,7 +47,7 @@ if (!botToken || botToken === 'YOUR_BOT_TOKEN_HERE') {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,      // Required to fetch members for staff directory
+    GatewayIntentBits.GuildMembers,      // Required to fetch members for staff directory & welcome
     GatewayIntentBits.GuildMessages,     // Required to fetch ticket messages
     GatewayIntentBits.MessageContent     // Required to read message content for transcripts
   ]
@@ -48,11 +58,19 @@ const commandsMap = new Map();
 const commandsJSON = [];
 
 function registerCommand(cmd) {
-  commandsMap.set(cmd.data.name, cmd);
-  commandsJSON.push(cmd.data.toJSON());
+  if (!cmd) return;
+  if (cmd.data) {
+    commandsMap.set(cmd.data.name, cmd);
+    commandsJSON.push(cmd.data.toJSON());
+  } else if (cmd.commands && Array.isArray(cmd.commands)) {
+    for (const sub of cmd.commands) {
+      commandsMap.set(sub.data.name, sub);
+      commandsJSON.push(sub.data.toJSON());
+    }
+  }
 }
 
-// Register command modules
+// Register all command modules
 registerCommand(ticketCmd);
 registerCommand(staffCmd);
 registerCommand(salesCmd);
@@ -61,6 +79,13 @@ registerCommand(giveawayCmd);
 registerCommand(oauthCmd);
 registerCommand(licenseCmd);
 registerCommand(legitCheckCmd);
+registerCommand(keyCmd);
+registerCommand(economyCmd);
+registerCommand(gamblingCmd);
+registerCommand(moderationCmd);
+registerCommand(profileCmd);
+registerCommand(setupCmd);
+registerCommand(rulesCmd);
 
 if (pavoBoosterCmd.commands) {
   for (const cmd of pavoBoosterCmd.commands) {
@@ -232,6 +257,36 @@ client.on('guildMemberRemove', async member => {
   }
 });
 
+// Real-time Event: Member joined the server (Welcome system)
+client.on('guildMemberAdd', async member => {
+  try {
+    const welcomeChannelId = config.welcomeChannelId;
+    if (!welcomeChannelId) return;
+
+    const channel = member.guild.channels.cache.get(welcomeChannelId) || await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+
+    const rulesChannelId = config.rulesChannelId;
+    const rulesMention = rulesChannelId ? `<#${rulesChannelId}>` : '#📜│regole-rules';
+
+    const embed = new EmbedBuilder()
+      .setTitle('👋 WELCOME TO THE BLOCKSPIN COMMUNITY 🎮')
+      .setDescription(
+        `Benvenuto <@${member.id}> nel server ufficiale!\n\n` +
+        `📜 **Prima di partecipare, leggi e accetta le regole in** ${rulesMention}.\n` +
+        `💬 Fai un salto in <#${config.communityChannelId || 'chat-generale'}> per presentarti alla community!`
+      )
+      .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setColor(0x00FF88)
+      .setFooter({ text: `Membro #${member.guild.memberCount}` })
+      .setTimestamp();
+
+    await channel.send({ content: `👋 Benvenuto <@${member.id}>!`, embeds: [embed] });
+  } catch (err) {
+    console.error('[WELCOME SYSTEM ERROR]', err);
+  }
+});
+
 // Interaction Event Listener
 client.on('interactionCreate', async interaction => {
   // 1. Chat input (slash commands)
@@ -243,7 +298,7 @@ client.on('interactionCreate', async interaction => {
       await command.execute(interaction, config);
     } catch (err) {
       console.error(`Error executing command ${interaction.commandName}:`, err);
-      const errMsg = { content: `❌ An error occurred executing this command: ${err.message}`, ephemeral: true };
+      const errMsg = { content: `❌ Si è verificato un errore eseguendo questo comando: ${err.message}`, ephemeral: true };
       
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(errMsg).catch(() => {});
@@ -255,7 +310,47 @@ client.on('interactionCreate', async interaction => {
 
   // 2. Buttons
   else if (interaction.isButton()) {
-    if (interaction.customId.startsWith('ticket_')) {
+    const customId = interaction.customId;
+
+    // Rule Acceptance Button
+    if (customId === 'btn_accept_rules') {
+      try {
+        const memberRole = interaction.guild.roles.cache.find(r => r.name === '👤 Member' || r.id === config.memberRoleId);
+        if (memberRole) {
+          const member = await interaction.guild.members.fetch(interaction.user.id);
+          if (member.roles.cache.has(memberRole.id)) {
+            return interaction.reply({ content: 'ℹ️ Hai già accettato il regolamento in precedenza!', ephemeral: true });
+          }
+          await member.roles.add(memberRole);
+        }
+
+        await db.recordRuleAcceptance(interaction.user.id, interaction.user.tag);
+        await db.addXp(interaction.user.id, 25);
+
+        return interaction.reply({
+          content: '✅ **Regole accettate con successo!** Ti è stato assegnato il ruolo **Member** e ora hai pieno accesso a tutti i canali della community.',
+          ephemeral: true
+        });
+      } catch (err) {
+        console.error('Error accepting rules:', err);
+        return interaction.reply({ content: '❌ Si è verificato un errore nell\'assegnazione del ruolo. Contatta un amministratore.', ephemeral: true });
+      }
+    }
+
+    // Game Interactions (Guess, Dice, Blackjack)
+    else if (customId.startsWith('guess_') || customId.startsWith('dice_') || customId.startsWith('bj_')) {
+      try {
+        await handleGameInteraction(interaction, config);
+      } catch (err) {
+        console.error('Error in game interaction:', err);
+        const errMsg = { content: `❌ Errore durante l'azione di gioco: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
+        else await interaction.reply(errMsg).catch(() => {});
+      }
+    }
+
+    // Ticket Buttons
+    else if (customId.startsWith('ticket_')) {
       try {
         await ticketCmd.handleButton(interaction, config);
       } catch (err) {
@@ -267,7 +362,7 @@ client.on('interactionCreate', async interaction => {
           await interaction.reply(errMsg).catch(() => {});
         }
       }
-    } else if (interaction.customId.startsWith('giveaway_')) {
+    } else if (customId.startsWith('giveaway_')) {
       try {
         await giveawayCmd.handleButton(interaction, config);
       } catch (err) {
@@ -279,7 +374,7 @@ client.on('interactionCreate', async interaction => {
           await interaction.reply(errMsg).catch(() => {});
         }
       }
-    } else if (interaction.customId.startsWith('legit_vote_')) {
+    } else if (customId.startsWith('legit_vote_')) {
       try {
         await legitCheckCmd.handleButton(interaction, config);
       } catch (err) {
@@ -296,7 +391,24 @@ client.on('interactionCreate', async interaction => {
 
   // 3. Modals
   else if (interaction.isModalSubmit()) {
-    if (interaction.customId === 'ticket_purchase_modal' || interaction.customId.startsWith('tweak_specs_modal')) {
+    const customId = interaction.customId;
+
+    if (customId.startsWith('guess_modal_')) {
+      try {
+        await handleGuessModalSubmit(interaction);
+      } catch (err) {
+        console.error('Error submitting guess modal:', err);
+        const errMsg = { content: `❌ Errore durante l'invio del numero: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
+        else await interaction.reply(errMsg).catch(() => {});
+      }
+    }
+    else if (
+      customId === 'ticket_purchase_modal' || 
+      customId.startsWith('tweak_specs_modal') ||
+      customId === 'ticket_add_user_modal' ||
+      customId === 'ticket_remove_user_modal'
+    ) {
       try {
         await ticketCmd.handleModal(interaction, config);
       } catch (err) {

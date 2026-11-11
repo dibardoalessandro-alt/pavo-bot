@@ -87,8 +87,13 @@
   },
   "applications": {
     "panelChannelId": "1570192629466013737",
-    "categoryId": "",
+    "categoryId": "1532385488554430575",
     "logChannelId": "",
+    "openPositions": {
+      "content_creator": false,
+      "beta_tester": true,
+      "staff": false
+    },
     "pingRoles": {
       "content_creator": "Senior Supporter",
       "beta_tester": "Senior Supporter",
@@ -101,7 +106,7 @@
     }
   },
   "legitCheck": {
-    "baseYes": 0,
-    "baseNo": 0
+    "baseYes": 523,
+    "baseNo": 2
   }
 }

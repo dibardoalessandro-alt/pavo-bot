@@ -219,16 +219,35 @@ async function refreshWelcomeMessage(channel, ticketInfo) {
 // Panel
 // ---------------------------------------------------------------------------
 
+function isPositionOpen(key, config) {
+  const openMap = config?.applications?.openPositions;
+  if (openMap && typeof openMap[key] === 'boolean') {
+    return openMap[key];
+  }
+  // By default, only beta_tester is open; content_creator and staff are locked/closed
+  return key === 'beta_tester';
+}
+
 function buildPanelEmbed(config, guild) {
   const embed = new EmbedBuilder()
     .setTitle(PANEL_TITLE)
     .setColor(brandColor(config))
     .setDescription(
-      'Pavo is growing, and we are expanding the team behind it.\n' +
-      'We are currently looking for dedicated members of the community to fill the following positions.\n\u200b'
+      'Pavo is expanding, and we are looking for dedicated members of the community to join our team.\n\n' +
+      'Review the available positions and their current status below:\n\u200b'
     )
     .addFields(
-      ...Object.values(positions).map(p => ({ name: `${p.emoji}  ${p.name}`, value: p.panelSummary, inline: false })),
+      ...Object.values(positions).map(p => {
+        const open = isPositionOpen(p.key, config);
+        const statusText = open
+          ? '🟢 **Status: Open / Accepting Applications**'
+          : '🔴 **Status: Closed / Not Hiring At This Time**';
+        return {
+          name: `${p.emoji}  ${p.name}`,
+          value: `${p.panelSummary}\n${statusText}\n\u200b`,
+          inline: false
+        };
+      }),
       {
         name: '📋  Before You Apply',
         value:
@@ -239,7 +258,7 @@ function buildPanelEmbed(config, guild) {
       },
       {
         name: '\u200b',
-        value: 'Select a position below to open a **private application ticket**.'
+        value: 'Click an active button below to open your **private application ticket**.'
       }
     )
     .setFooter({ text: FOOTER_TEXT, iconURL: guild?.iconURL() || undefined })
@@ -250,16 +269,18 @@ function buildPanelEmbed(config, guild) {
   return embed;
 }
 
-function buildPanelRow() {
-  return new ActionRowBuilder().addComponents(
-    ...Object.values(positions).map(p =>
-      new ButtonBuilder()
-        .setCustomId(`app_open:${p.key}`)
-        .setLabel(p.name)
-        .setEmoji(p.emoji)
-        .setStyle(ButtonStyle.Primary)
-    )
-  );
+function buildPanelComponents(config) {
+  return Object.values(positions).map(p => {
+    const open = isPositionOpen(p.key, config);
+    const button = new ButtonBuilder()
+      .setCustomId(`app_open:${p.key}`)
+      .setLabel(open ? `Apply for ${p.name}` : `${p.name} (Closed)`)
+      .setEmoji(open ? p.emoji : '🔒')
+      .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setDisabled(!open);
+
+    return new ActionRowBuilder().addComponents(button);
+  });
 }
 
 // Creates the panel once, then edits it in place on every restart (no duplicates).
@@ -277,7 +298,7 @@ async function sendOrUpdateApplicationPanel(client, config) {
   }
 
   try {
-    const payload = { embeds: [buildPanelEmbed(config, channel.guild)], components: [buildPanelRow()] };
+    const payload = { embeds: [buildPanelEmbed(config, channel.guild)], components: buildPanelComponents(config) };
 
     let panelMsg = null;
     const stored = await db.getPanelMessage(PANEL_KEY);
@@ -346,7 +367,8 @@ function buildWelcomeEmbed(position, user, config, guild, ticketInfo) {
 }
 
 async function resolveParentCategory(guild, config) {
-  const candidates = [config.applications?.categoryId, config.ticketCategoryId].filter(id => id && /^\d+$/.test(id));
+  const targetId = config.applications?.categoryId || '1532385488554430575';
+  const candidates = [targetId, config.ticketCategoryId].filter(id => id && /^\d+$/.test(id));
   for (const id of candidates) {
     const category = guild.channels.cache.get(id) || await guild.channels.fetch(id).catch(() => null);
     if (category && category.type === ChannelType.GuildCategory) return category.id;
@@ -377,6 +399,11 @@ async function findExistingApplicationChannel(guild, userId, type) {
 async function openApplicationTicket(interaction, config, type) {
   const position = positions[type];
   if (!position) return safeReply(interaction, ephemeral('❌ This position is no longer available.'));
+
+  if (!isPositionOpen(type, config)) {
+    return safeReply(interaction, ephemeral('🔒 Applications for this position are currently closed.'));
+  }
+
   if (!interaction.guild) return safeReply(interaction, ephemeral('❌ Applications can only be opened inside the server.'));
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });

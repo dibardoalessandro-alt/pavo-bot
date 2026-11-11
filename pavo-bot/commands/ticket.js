@@ -194,13 +194,13 @@ function getPurchaseCategories(config) {
 
 // Existing support categories (kept as-is)
 const SUPPORT_TYPES = {
-  general_support: { title: 'General Support', suffix: 'general', label: 'General Support', emoji: '🛠️', description: 'Assicurati supporto generale o domande sul server' },
-  blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin', label: 'BlockSpin Support', emoji: '🎮', description: 'Supporto dedicato per BlockSpin / Visuals' },
-  trading_issue: { title: 'Trading Issue', suffix: 'trading', label: 'Trading Issue', emoji: '💰', description: 'Problemi o richieste relative a scambi o trading' },
-  '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1', label: '1v1 Issue', emoji: '⚔️', description: 'Contestazioni o problematiche relative a match 1v1' },
-  key_license: { title: 'Key / License Support', suffix: 'license', label: 'Key / License', emoji: '🔑', description: 'Problemi con codici licenza, riscatto o attivazione' },
-  report_issue: { title: 'Member Report', suffix: 'report', label: 'Report', emoji: '🚨', description: 'Segnala un utente o un comportamento scorretto' },
-  other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Altro tipo di richiesta di assistenza' }
+  general_support: { title: 'General Support', suffix: 'general', label: 'General Support', emoji: '🛠️', description: 'General support and server questions' },
+  blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin', label: 'BlockSpin Support', emoji: '🎮', description: 'Dedicated support for BlockSpin & Visuals' },
+  trading_issue: { title: 'Trading Issue', suffix: 'trading', label: 'Trading Issue', emoji: '💰', description: 'Trading disputes and balance inquiries' },
+  '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1', label: '1v1 Issue', emoji: '⚔️', description: 'Match disputes and 1v1 issues' },
+  key_license: { title: 'Key / License Support', suffix: 'license', label: 'Key / License', emoji: '🔑', description: 'License key activation, redemption and issues' },
+  report_issue: { title: 'Member Report', suffix: 'report', label: 'Report', emoji: '🚨', description: 'Report a member or server incident' },
+  other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Other questions or assistance' }
 };
 
 // Lazy-loaded to avoid a circular require between ticket.js and applications.js
@@ -239,15 +239,15 @@ module.exports = {
     .setDescription('Ticket management commands')
     .addSubcommand(sub =>
       sub.setName('close')
-        .setDescription('Chiudi il ticket corrente / Close the current ticket')
+        .setDescription('Close the current ticket')
     )
     .addSubcommand(sub =>
       sub.setName('delete')
-        .setDescription('Elimina definitivamente questo ticket / Delete ticket permanently')
+        .setDescription('Permanently delete this ticket')
     )
     .addSubcommand(sub =>
       sub.setName('reopen')
-        .setDescription('Riapri il ticket corrente / Reopen current closed ticket')
+        .setDescription('Reopen the current closed ticket')
     ),
 
   // Slash command handler (/ticket close, /ticket delete, /ticket reopen)
@@ -259,7 +259,7 @@ module.exports = {
 
     if (!isStaff) {
       return interaction.reply({
-        content: '❌ Solo i membri dello staff possono gestire i ticket.',
+        content: '❌ Only staff members can manage tickets.',
         ephemeral: true
       });
     }
@@ -274,7 +274,7 @@ module.exports = {
       return this.handleReopenTicketAction(interaction, config, channel, member);
     } else {
       return interaction.reply({
-        content: 'ℹ️ Comandi disponibili: `/ticket close`, `/ticket delete`, `/ticket reopen`',
+        content: 'ℹ️ Available commands: `/ticket close`, `/ticket delete`, `/ticket reopen`',
         ephemeral: true
       });
     }
@@ -365,15 +365,15 @@ module.exports = {
         await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
       }
     } else if (SUPPORT_TYPES[product] || product === 'other_support') {
-      const selected = SUPPORT_TYPES[product];
-      await interaction.reply({ content: `⏳ Creazione ticket **${selected.title}** in corso...`, ephemeral: true });
+      const selected = SUPPORT_TYPES[product] || { title: 'Support Ticket', suffix: 'ticket' };
+      await interaction.reply({ content: `⏳ Creating your **${selected.title}** ticket...`, ephemeral: true });
 
       try {
         const ticketChannel = await createTicketChannel(interaction, config, selected.title, selected.suffix);
-        await interaction.editReply({ content: `✅ Ticket creato con successo: <#${ticketChannel.id}>` });
+        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
       } catch (err) {
         console.error('Error creating ticket:', err);
-        await interaction.editReply({ content: `❌ Impossibile creare il ticket: ${err.message}` });
+        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
       }
     } else {
       // Removed / unknown category (e.g. an old menu that still shows Pavo Tweak or Orbs Mobile)
@@ -535,13 +535,13 @@ module.exports = {
     else if (customId === 'ticket_add_user') {
       const modal = new ModalBuilder()
         .setCustomId('ticket_add_user_modal')
-        .setTitle('Aggiungi Utente al Ticket');
+        .setTitle('Add User to Ticket');
 
       const userInput = new TextInputBuilder()
         .setCustomId('target_user_id')
-        .setLabel('ID o Menzione Utente')
+        .setLabel('User ID or Mention')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Es: 123456789012345678')
+        .setPlaceholder('e.g. 123456789012345678')
         .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(userInput));
@@ -552,13 +552,13 @@ module.exports = {
     else if (customId === 'ticket_remove_user') {
       const modal = new ModalBuilder()
         .setCustomId('ticket_remove_user_modal')
-        .setTitle('Rimuovi Utente dal Ticket');
+        .setTitle('Remove User from Ticket');
 
       const userInput = new TextInputBuilder()
         .setCustomId('target_user_id')
-        .setLabel('ID o Menzione Utente')
+        .setLabel('User ID or Mention')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Es: 123456789012345678')
+        .setPlaceholder('e.g. 123456789012345678')
         .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(userInput));
@@ -630,9 +630,9 @@ module.exports = {
     const staffRoleName = getStaffRoleName(member, config);
     if (!staffRoleName) {
       if (interaction.replied || interaction.deferred) {
-        return interaction.followUp({ content: '❌ Solo i membri dello staff possono chiudere i ticket.', ephemeral: true });
+        return interaction.followUp({ content: '❌ Only staff members can close tickets.', ephemeral: true });
       }
-      return interaction.reply({ content: '❌ Solo i membri dello staff possono chiudere i ticket.', ephemeral: true });
+      return interaction.reply({ content: '❌ Only staff members can close tickets.', ephemeral: true });
     }
 
     if (!interaction.deferred && !interaction.replied) {
@@ -660,8 +660,8 @@ module.exports = {
       // If already closed, avoid duplicate logging or crashes; just provide the control buttons!
       if (wasAlreadyClosed) {
         const alreadyClosedEmbed = new EmbedBuilder()
-          .setTitle('🔒 Ticket Già Chiuso / Ticket Already Closed')
-          .setDescription(`Questo ticket è già stato chiuso in precedenza.\n\nPuoi **riaprirlo** o **eliminarlo definitivamente** usando i pulsanti qui sotto:`)
+          .setTitle('🔒 Ticket Already Closed')
+          .setDescription(`This ticket has already been closed.\n\nYou can reopen or permanently delete it using the buttons below:`)
           .setColor('#eab308')
           .setTimestamp();
 
@@ -728,13 +728,13 @@ module.exports = {
 
       // Always post the closure card directly in response at the bottom of the chat with buttons
       const closeEmbed = new EmbedBuilder()
-        .setTitle('🔒 Ticket Chiuso / Ticket Closed')
-        .setDescription(`Il ticket è stato chiuso da <@${interaction.user.id}>.\nI permessi di scrittura per il cliente sono stati disattivati.\n\n**Gestione:** Usa i pulsanti sottostanti per riaprire o eliminare definitivamente questo ticket:`)
+        .setTitle('🔒 Ticket Closed')
+        .setDescription(`This ticket was closed by <@${interaction.user.id}>.\nCustomer write permissions have been revoked.\n\n**Management:** Use the buttons below to reopen or permanently delete this ticket:`)
         .setColor('#ef4444')
         .addFields(
-          { name: '🎟️ Canale', value: `#${channel.name}`, inline: true },
-          { name: '👤 Creatore', value: creatorId && creatorId !== 'Unknown' ? `<@${creatorId}>` : creatorUser, inline: true },
-          { name: '🔒 Chiuso da', value: `<@${interaction.user.id}>`, inline: true }
+          { name: '🎟️ Channel', value: `#${channel.name}`, inline: true },
+          { name: '👤 Creator', value: creatorId && creatorId !== 'Unknown' ? `<@${creatorId}>` : creatorUser, inline: true },
+          { name: '🔒 Closed by', value: `<@${interaction.user.id}>`, inline: true }
         )
         .setTimestamp();
 
@@ -750,12 +750,12 @@ module.exports = {
     const staffRoleName = getStaffRoleName(member, config);
     if (!staffRoleName) {
       if (interaction.replied || interaction.deferred) {
-        return interaction.followUp({ content: '❌ Solo i membri dello staff possono eliminare i ticket.', ephemeral: true });
+        return interaction.followUp({ content: '❌ Only staff members can delete tickets.', ephemeral: true });
       }
-      return interaction.reply({ content: '❌ Solo i membri dello staff possono eliminare i ticket.', ephemeral: true });
+      return interaction.reply({ content: '❌ Only staff members can delete tickets.', ephemeral: true });
     }
 
-    const deleteReply = { content: '🗑️ Il canale ticket verrà eliminato definitivamente tra 2 secondi...' };
+    const deleteReply = { content: '🗑️ This ticket channel will be permanently deleted in 2 seconds...' };
     if (interaction.deferred || interaction.replied) {
       await interaction.followUp(deleteReply).catch(() => {});
     } else {
@@ -778,9 +778,9 @@ module.exports = {
     const staffRoleName = getStaffRoleName(member, config);
     if (!staffRoleName) {
       if (interaction.replied || interaction.deferred) {
-        return interaction.followUp({ content: '❌ Solo i membri dello staff possono riaprire i ticket.', ephemeral: true });
+        return interaction.followUp({ content: '❌ Only staff members can reopen tickets.', ephemeral: true });
       }
-      return interaction.reply({ content: '❌ Solo i membri dello staff possono riaprire i ticket.', ephemeral: true });
+      return interaction.reply({ content: '❌ Only staff members can reopen tickets.', ephemeral: true });
     }
 
     if (!interaction.deferred && !interaction.replied) {
@@ -848,8 +848,8 @@ module.exports = {
       }
 
       const reopenEmbed = new EmbedBuilder()
-        .setTitle('🔓 Ticket Riaperto / Ticket Reopened')
-        .setDescription(`Il ticket è stato riaperto con successo da <@${interaction.user.id}>.\nI permessi di scrittura per il cliente sono stati ripristinati.`)
+        .setTitle('🔓 Ticket Reopened')
+        .setDescription(`This ticket was successfully reopened by <@${interaction.user.id}>.\nCustomer write permissions have been restored.`)
         .setColor('#22c55e')
         .setTimestamp();
 
@@ -898,7 +898,7 @@ module.exports = {
       const targetMember = await interaction.guild.members.fetch(rawUser).catch(() => null);
 
       if (!targetMember) {
-        return interaction.editReply({ content: '❌ Utente non trovato nel server. Inserisci un ID Discord valido.' });
+        return interaction.editReply({ content: '❌ User not found in the server. Please enter a valid Discord ID.' });
       }
 
       await interaction.channel.permissionOverwrites.edit(targetMember.id, {
@@ -908,7 +908,7 @@ module.exports = {
         AttachFiles: true
       });
 
-      await interaction.editReply({ content: `➕ <@${targetMember.id}> è stato aggiunto a questo ticket con successo!` });
+      await interaction.editReply({ content: `➕ <@${targetMember.id}> has been successfully added to this ticket!` });
     }
 
     // 3. REMOVE USER MODAL
@@ -918,11 +918,11 @@ module.exports = {
       const targetMember = await interaction.guild.members.fetch(rawUser).catch(() => null);
 
       if (!targetMember) {
-        return interaction.editReply({ content: '❌ Utente non trovato.' });
+        return interaction.editReply({ content: '❌ User not found.' });
       }
 
       await interaction.channel.permissionOverwrites.delete(targetMember.id);
-      await interaction.editReply({ content: `➖ <@${targetMember.id}> è stato rimosso da questo ticket.` });
+      await interaction.editReply({ content: `➖ <@${targetMember.id}> has been removed from this ticket.` });
     }
 
     // 4. VERIFIED PURCHASE RECORD MODAL

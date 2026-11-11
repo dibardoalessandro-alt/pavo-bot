@@ -19,7 +19,8 @@ let dbData = {
   warnings: [],
   rule_acceptances: {},
   profiles: {},
-  server_config: {}
+  server_config: {},
+  panels: {}
 };
 
 // Safe JSON write
@@ -53,6 +54,7 @@ async function initDatabase() {
       if (!dbData.rule_acceptances) dbData.rule_acceptances = {};
       if (!dbData.profiles) dbData.profiles = {};
       if (!dbData.server_config) dbData.server_config = {};
+      if (!dbData.panels) dbData.panels = {};
       console.log(`✅ Loaded existing database from: ${dbPath}`);
     } catch (err) {
       console.error('⚠️ Database file was corrupted or unreadable. Reinitializing...', err);
@@ -295,7 +297,8 @@ async function getAllStaffStats() {
 }
 
 // Record a new Ticket
-async function createTicket(ticketId, creatorId, creatorUsername, welcomeMessageId = null) {
+// `meta` is optional: { kind: 'support' | 'purchase' | 'application', product, application }
+async function createTicket(ticketId, creatorId, creatorUsername, welcomeMessageId = null, meta = {}) {
   const now = new Date().toISOString();
   dbData.tickets[ticketId] = {
     ticket_id: ticketId,
@@ -306,9 +309,13 @@ async function createTicket(ticketId, creatorId, creatorUsername, welcomeMessage
     status: 'OPEN',
     closed_by: null,
     created_at: now,
-    closed_at: null
+    closed_at: null,
+    kind: meta.kind || 'support',
+    ...(meta.product ? { product: meta.product } : {}),
+    ...(meta.application ? { application: meta.application } : {})
   };
   save();
+  return dbData.tickets[ticketId];
 }
 
 // Claim a Ticket
@@ -500,9 +507,42 @@ async function getSalesLeaderboard() {
   });
 }
 
-// Get active ticket for user
+// Get active support/purchase ticket for user (application tickets are tracked separately)
 async function getUserOpenTicket(creatorId) {
-  return Object.values(dbData.tickets).find(t => t.creator_id === creatorId && t.status === 'OPEN') || null;
+  return Object.values(dbData.tickets).find(t => t.creator_id === creatorId && t.status === 'OPEN' && t.kind !== 'application') || null;
+}
+
+// Get active application ticket for a user and position type
+async function getUserOpenApplication(creatorId, appType) {
+  return Object.values(dbData.tickets).find(t =>
+    t.creator_id === creatorId &&
+    t.status === 'OPEN' &&
+    t.kind === 'application' &&
+    t.application && t.application.type === appType
+  ) || null;
+}
+
+// Merge a patch into a ticket's application state (optionally also patch root ticket fields)
+async function updateTicketApplication(ticketId, patch = {}, ticketPatch = {}) {
+  const ticket = dbData.tickets[ticketId];
+  if (!ticket) return null;
+  Object.assign(ticket, ticketPatch);
+  ticket.kind = 'application';
+  ticket.application = { ...(ticket.application || {}), ...patch };
+  save();
+  return ticket;
+}
+
+// Persistent panel message tracking (application panel, etc.)
+async function getPanelMessage(key) {
+  if (!dbData.panels) dbData.panels = {};
+  return dbData.panels[key] || null;
+}
+
+async function setPanelMessage(key, channelId, messageId) {
+  if (!dbData.panels) dbData.panels = {};
+  dbData.panels[key] = { channelId, messageId, updated_at: new Date().toISOString() };
+  save();
 }
 
 // Get specific ticket
@@ -1044,6 +1084,10 @@ module.exports = {
   getSalesByUser,
   getSalesLeaderboard,
   getUserOpenTicket,
+  getUserOpenApplication,
+  updateTicketApplication,
+  getPanelMessage,
+  setPanelMessage,
   getTicket,
   reopenTicket,
   deleteTicket,

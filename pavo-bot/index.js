@@ -17,6 +17,7 @@ const giveawayCmd = require('./commands/giveaway');
 const oauthCmd = require('./commands/oauth');
 const licenseCmd = require('./commands/license');
 const legitCheckCmd = require('./commands/legitCheck');
+const applicationsCmd = require('./commands/applications');
 const pavoBoosterCmd = require('./commands/pavoBooster');
 const boosterApi = require('./services/boosterApi');
 const OAuthServer = require('./oauthServer');
@@ -79,6 +80,7 @@ registerCommand(giveawayCmd);
 registerCommand(oauthCmd);
 registerCommand(licenseCmd);
 registerCommand(legitCheckCmd);
+registerCommand(applicationsCmd);
 registerCommand(keyCmd);
 registerCommand(economyCmd);
 registerCommand(gamblingCmd);
@@ -140,6 +142,20 @@ client.once('ready', async () => {
     await ticketCmd.sendTicketPanel(client, config);
   } catch (panelErr) {
     console.error('❌ Failed to initialize support ticket panel:', panelErr);
+  }
+
+  // Send or update applications panel if configured
+  try {
+    await applicationsCmd.sendOrUpdateApplicationPanel(client, config);
+  } catch (appPanelErr) {
+    console.error('❌ Failed to initialize applications panel:', appPanelErr);
+  }
+
+  // Send or update Pavo Hub legit check panel if configured
+  try {
+    await legitCheckCmd.sendOrUpdateLegitCheck(client, config);
+  } catch (legitErr) {
+    console.error('❌ Failed to initialize legit check panel:', legitErr);
   }
 
   // Initialize active giveaway timers and auto-ending
@@ -386,6 +402,18 @@ client.on('interactionCreate', async interaction => {
           await interaction.reply(errMsg).catch(() => {});
         }
       }
+    } else if (customId.startsWith('app_')) {
+      try {
+        await applicationsCmd.handleButton(interaction, config);
+      } catch (err) {
+        console.error(`Error handling application button interaction:`, err);
+        const errMsg = { content: `❌ Error handling application action: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(errMsg).catch(() => {});
+        } else {
+          await interaction.reply(errMsg).catch(() => {});
+        }
+      }
     }
   }
 
@@ -399,6 +427,16 @@ client.on('interactionCreate', async interaction => {
       } catch (err) {
         console.error('Error submitting guess modal:', err);
         const errMsg = { content: `❌ Errore durante l'invio del numero: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
+        else await interaction.reply(errMsg).catch(() => {});
+      }
+    }
+    else if (customId.startsWith('app_modal:')) {
+      try {
+        await applicationsCmd.handleModal(interaction, config);
+      } catch (err) {
+        console.error('Error submitting application modal:', err);
+        const errMsg = { content: `❌ Error submitting application: ${err.message}`, ephemeral: true };
         if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
         else await interaction.reply(errMsg).catch(() => {});
       }

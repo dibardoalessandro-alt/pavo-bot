@@ -50,7 +50,8 @@ async function hasActiveTicket(guild, userId) {
 }
 
 // Shared ticket creator logic
-async function createTicketChannel(interaction, config, productName, channelSuffix, fields) {
+// `options` (optional): { footerText, kind: 'support' | 'purchase' }
+async function createTicketChannel(interaction, config, productName, channelSuffix, fields, options = {}) {
   const guild = interaction.guild;
   const user = interaction.user;
 
@@ -125,9 +126,9 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     welcomeEmbed.addFields(...fields);
   }
 
-  const footerText = productName.includes('Orbs')
+  const footerText = options.footerText || (productName.includes('Orbs')
     ? 'Orbs Premium Support'
-    : (config.embedFooterText || 'Pavo Tweak Support');
+    : (config.embedFooterText || 'Pavo Tweak Support'));
 
   welcomeEmbed
     .setThumbnail(guild.iconURL({ dynamic: true }) || null)
@@ -172,9 +173,39 @@ async function createTicketChannel(interaction, config, productName, channelSuff
   });
 
   // Save to persistent DB with welcome message ID for reliable lookup
-  await db.createTicket(channel.id, user.id, user.username, welcomeMsg.id);
+  await db.createTicket(channel.id, user.id, user.username, welcomeMsg.id, {
+    kind: options.kind || 'support',
+    product: productName
+  });
 
   return channel;
+}
+
+// Purchase categories shown in the "Open Ticket to Buy" menu (editable in config.json → purchaseTickets.categories)
+function getPurchaseCategories(config) {
+  const list = Array.isArray(config.purchaseTickets?.categories) ? config.purchaseTickets.categories : [];
+  const seen = new Set();
+  return list.filter(c => {
+    if (!c || !c.value || !c.label || seen.has(c.value)) return false; // no duplicate categories
+    seen.add(c.value);
+    return true;
+  });
+}
+
+// Existing support categories (kept as-is)
+const SUPPORT_TYPES = {
+  general_support: { title: 'General Support', suffix: 'general', label: 'General Support', emoji: '🛠️', description: 'Assicurati supporto generale o domande sul server' },
+  blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin', label: 'BlockSpin Support', emoji: '🎮', description: 'Supporto dedicato per BlockSpin / Visuals' },
+  trading_issue: { title: 'Trading Issue', suffix: 'trading', label: 'Trading Issue', emoji: '💰', description: 'Problemi o richieste relative a scambi o trading' },
+  '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1', label: '1v1 Issue', emoji: '⚔️', description: 'Contestazioni o problematiche relative a match 1v1' },
+  key_license: { title: 'Key / License Support', suffix: 'license', label: 'Key / License', emoji: '🔑', description: 'Problemi con codici licenza, riscatto o attivazione' },
+  report_issue: { title: 'Member Report', suffix: 'report', label: 'Report', emoji: '🚨', description: 'Segnala un utente o un comportamento scorretto' },
+  other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Altro tipo di richiesta di assistenza' }
+};
+
+// Lazy-loaded to avoid a circular require between ticket.js and applications.js
+function getApplications() {
+  return require('./applications');
 }
 
 // Helper to find the ticket's welcome message reliably (even with 100+ messages)
@@ -251,7 +282,7 @@ module.exports = {
 
   // Setup the ticket panel in the support channel on bot startup (with duplicate prevention)
   async sendTicketPanel(client, config) {
-    const channelId = '1532385731513815170';
+    const channelId = config.purchaseTickets?.panelChannelId || '1532385731513815170';
     const channel = await client.channels.fetch(channelId).catch(() => null);
 
     if (!channel) {
@@ -313,44 +344,28 @@ module.exports = {
       });
     }
 
-    if (product === 'pavo_tweak') {
-      // 1. Pavo Tweak -> Ask for operating system using buttons
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('ticket_os:Windows 11')
-          .setLabel('Windows 11')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId('ticket_os:Windows 10')
-          .setLabel('Windows 10')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId('ticket_os:Kali Linux')
-          .setLabel('Kali Linux')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId('ticket_os:Other')
-          .setLabel('Other')
-          .setStyle(ButtonStyle.Secondary)
-      );
+    const purchaseCategory = getPurchaseCategories(config).find(c => c.value === product);
 
-      await interaction.reply({
-        content: '⚡ **Pavo Tweak Setup**\nPlease select your Operating System below to proceed:',
-        components: [row],
-        ephemeral: true
-      });
-    } else {
-      const typeMap = {
-        general_support: { title: 'General Support', suffix: 'general' },
-        blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin' },
-        trading_issue: { title: 'Trading Issue', suffix: 'trading' },
-        '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1' },
-        key_license: { title: 'Key / License Support', suffix: 'license' },
-        report_issue: { title: 'Member Report', suffix: 'report' },
-        other_support: { title: 'General / Other Support', suffix: 'support' }
-      };
-
-      const selected = typeMap[product] || { title: 'Support Ticket', suffix: 'ticket' };
+    if (purchaseCategory) {
+      // Purchase categories (Orbs PC, Custom Discord Bot, Pavo's Hub Script, ...) → create ticket immediately
+      const productName = purchaseCategory.productName || purchaseCategory.label;
+      await interaction.reply({ content: `⏳ Creating your **${productName}** ticket...`, ephemeral: true });
+      try {
+        const ticketChannel = await createTicketChannel(
+          interaction,
+          config,
+          productName,
+          purchaseCategory.channelSuffix || purchaseCategory.value,
+          null,
+          { footerText: purchaseCategory.footerText, kind: 'purchase' }
+        );
+        await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
+      } catch (err) {
+        console.error(`Error creating ${productName} ticket:`, err);
+        await interaction.editReply({ content: `❌ Failed to create ticket: ${err.message}` });
+      }
+    } else if (SUPPORT_TYPES[product] || product === 'other_support') {
+      const selected = SUPPORT_TYPES[product];
       await interaction.reply({ content: `⏳ Creazione ticket **${selected.title}** in corso...`, ephemeral: true });
 
       try {
@@ -360,6 +375,12 @@ module.exports = {
         console.error('Error creating ticket:', err);
         await interaction.editReply({ content: `❌ Impossibile creare il ticket: ${err.message}` });
       }
+    } else {
+      // Removed / unknown category (e.g. an old menu that still shows Pavo Tweak or Orbs Mobile)
+      await interaction.reply({
+        content: '❌ This category is no longer available. Please press **Open Ticket to Buy** again to see the current options.',
+        ephemeral: true
+      });
     }
   },
 
@@ -382,52 +403,36 @@ module.exports = {
         });
       }
 
-      // Show dropdown menu for support / ticket selections
+      // Show dropdown menu: purchase categories first (from config), then the existing support categories
+      const options = getPurchaseCategories(config).map(c => {
+        const opt = new StringSelectMenuOptionBuilder()
+          .setLabel(String(c.label).slice(0, 100))
+          .setValue(String(c.value).slice(0, 100));
+        if (c.description) opt.setDescription(String(c.description).slice(0, 100));
+        if (c.emoji) opt.setEmoji(c.emoji);
+        return opt;
+      });
+
+      if (config.purchaseTickets?.showSupportCategories !== false) {
+        for (const [value, t] of Object.entries(SUPPORT_TYPES)) {
+          options.push(
+            new StringSelectMenuOptionBuilder()
+              .setLabel(t.label)
+              .setValue(value)
+              .setDescription(t.description)
+              .setEmoji(t.emoji)
+          );
+        }
+      }
+
+      if (options.length === 0) {
+        return interaction.reply({ content: '❌ No ticket categories are configured right now.', ephemeral: true });
+      }
+
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('ticket_select_product')
-        .setPlaceholder('Select Ticket Type / Seleziona Tipo di Ticket...')
-        .addOptions(
-          new StringSelectMenuOptionBuilder()
-            .setLabel('General Support')
-            .setValue('general_support')
-            .setDescription('Assicurati supporto generale o domande sul server')
-            .setEmoji('🛠️'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('BlockSpin Support')
-            .setValue('blockspin_support')
-            .setDescription('Supporto dedicato per BlockSpin / Visuals')
-            .setEmoji('🎮'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Trading Issue')
-            .setValue('trading_issue')
-            .setDescription('Problemi o richieste relative a scambi o trading')
-            .setEmoji('💰'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('1v1 Issue')
-            .setValue('1v1_issue')
-            .setDescription('Contestazioni o problematiche relative a match 1v1')
-            .setEmoji('⚔️'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Key / License')
-            .setValue('key_license')
-            .setDescription('Problemi con codici licenza, riscatto o attivazione')
-            .setEmoji('🔑'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Report')
-            .setValue('report_issue')
-            .setDescription('Segnala un utente o un comportamento scorretto')
-            .setEmoji('🚨'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Pavo Tweak')
-            .setValue('pavo_tweak')
-            .setDescription('Acquisto o supporto per Pavo Tweak Suite (FPS / PC)')
-            .setEmoji('⚡'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Other')
-            .setValue('other_support')
-            .setDescription('Altro tipo di richiesta di assistenza')
-            .setEmoji('💡')
-        );
+        .setPlaceholder('Select a product or ticket type...')
+        .addOptions(options.slice(0, 25));
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
       await interaction.reply({
@@ -799,24 +804,27 @@ module.exports = {
       await db.reopenTicket(channel.id);
 
       // Restore original buttons
-      const activeRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('ticket_claim')
-          .setLabel('Claim Ticket')
-          .setEmoji('📥')
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(claimedBy !== null),
-        new ButtonBuilder()
-          .setCustomId('ticket_close')
-          .setLabel('Close Ticket')
-          .setEmoji('🔒')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId('ticket_purchase')
-          .setLabel('Purchase Completed')
-          .setEmoji('💰')
-          .setStyle(ButtonStyle.Success)
-      );
+      const isApp = ticketInfo?.kind === 'application' || getApplications().isApplicationChannel(channel);
+      const activeRow = isApp
+        ? getApplications().buildControlsRow(ticketInfo)
+        : new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('ticket_claim')
+              .setLabel('Claim Ticket')
+              .setEmoji('📥')
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(claimedBy !== null),
+            new ButtonBuilder()
+              .setCustomId('ticket_close')
+              .setLabel('Close Ticket')
+              .setEmoji('🔒')
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId('ticket_purchase')
+              .setLabel('Purchase Completed')
+              .setEmoji('💰')
+              .setStyle(ButtonStyle.Success)
+          );
 
       // Update welcome message if found
       try {
@@ -824,10 +832,13 @@ module.exports = {
         if (welcomeMessage) {
           const oldEmbed = welcomeMessage.embeds[0];
           if (oldEmbed) {
+            const statusVal = isApp
+              ? getApplications().getStatusText(ticketInfo)
+              : (claimedBy ? `📥 Claimed by <@${claimedBy}>` : '🟢 Open / Unclaimed');
             const updatedEmbed = EmbedBuilder.from(oldEmbed)
               .setFields(
                 ...oldEmbed.fields.filter(f => f.name !== '⏳ Status'),
-                { name: '⏳ Status', value: claimedBy ? `📥 Claimed by <@${claimedBy}>` : '🟢 Open / Unclaimed', inline: true }
+                { name: '⏳ Status', value: statusVal, inline: true }
               );
             await welcomeMessage.edit({ embeds: [updatedEmbed], components: [activeRow] }).catch(() => {});
           }

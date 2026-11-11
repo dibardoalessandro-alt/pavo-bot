@@ -52,5 +52,56 @@
   "botLogChannelId": "1554853667381710870",
   "gameResultsChannelId": "1554856588169453568",
   "welcomeChannelId": "1554856579478593537",
-  "memberRoleId": "1554853604584853596"
+  "memberRoleId": "1554853604584853596",
+  "purchaseTickets": {
+    "panelChannelId": "1532385731513815170",
+    "showSupportCategories": true,
+    "categories": [
+      {
+        "value": "orbs_pc",
+        "label": "Orbs PC",
+        "emoji": "🖥️",
+        "description": "Purchase Orbs for PC",
+        "productName": "Orbs PC",
+        "channelSuffix": "orbs-pc",
+        "footerText": "Orbs Premium Support"
+      },
+      {
+        "value": "custom_bot",
+        "label": "Custom Discord Bot",
+        "emoji": "🤖",
+        "description": "Custom bot development & hosting",
+        "productName": "Custom Discord Bot",
+        "channelSuffix": "custom-bot"
+      },
+      {
+        "value": "pavo_hub_script",
+        "label": "Buy Pavo's Hub Script",
+        "emoji": "🟦",
+        "description": "Purchase access to the Pavo Hub script",
+        "productName": "Pavo's Hub Script",
+        "channelSuffix": "hub-script",
+        "footerText": "Pavo Hub · Premium Support"
+      }
+    ]
+  },
+  "applications": {
+    "panelChannelId": "1570192629466013737",
+    "categoryId": "",
+    "logChannelId": "",
+    "pingRoles": {
+      "content_creator": "Senior Supporter",
+      "beta_tester": "Senior Supporter",
+      "staff": "Management"
+    },
+    "reviewerRoles": {
+      "content_creator": ["Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
+      "beta_tester": ["Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
+      "staff": ["Pavo", "Founder", "Management", "COO"]
+    }
+  },
+  "legitCheck": {
+    "baseYes": 0,
+    "baseNo": 0
+  }
 }

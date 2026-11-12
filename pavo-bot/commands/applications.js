@@ -224,42 +224,22 @@ function isPositionOpen(key, config) {
   if (openMap && typeof openMap[key] === 'boolean') {
     return openMap[key];
   }
-  // By default, only beta_tester is open; content_creator and staff are locked/closed
-  return key === 'beta_tester';
+  // Default: beta_tester and staff open; content_creator closed
+  return key === 'beta_tester' || key === 'staff';
 }
 
-function buildPanelEmbed(config, guild) {
+function buildHeaderEmbed(config, guild) {
   const embed = new EmbedBuilder()
     .setTitle(PANEL_TITLE)
     .setColor(brandColor(config))
     .setDescription(
       'Pavo is expanding, and we are looking for dedicated members of the community to join our team.\n\n' +
-      'Review the available positions and their current status below:\n\u200b'
-    )
-    .addFields(
-      ...Object.values(positions).map(p => {
-        const open = isPositionOpen(p.key, config);
-        const statusText = open
-          ? '🟢 **Status: Open / Accepting Applications**'
-          : '🔴 **Status: Closed / Not Hiring At This Time**';
-        return {
-          name: `${p.emoji}  ${p.name}`,
-          value: `${p.panelSummary}\n${statusText}\n\u200b`,
-          inline: false
-        };
-      }),
-      {
-        name: '📋  Before You Apply',
-        value:
-          '• Read the requirements inside your ticket carefully\n' +
-          '• Answer every question honestly and in detail\n' +
-          '• One open application per position\n' +
-          '• Every application is reviewed manually by our team'
-      },
-      {
-        name: '\u200b',
-        value: 'Click an active button below to open your **private application ticket**.'
-      }
+      'Review the positions below and click the button directly under the position you wish to apply for.\n\n' +
+      '📋 **Before You Apply:**\n' +
+      '• Read the requirements inside your private ticket carefully\n' +
+      '• Answer every question honestly and in detail\n' +
+      '• One open application per position at a time\n' +
+      '• Every application is reviewed manually by our leadership team'
     )
     .setFooter({ text: FOOTER_TEXT, iconURL: guild?.iconURL() || undefined })
     .setTimestamp();
@@ -269,21 +249,37 @@ function buildPanelEmbed(config, guild) {
   return embed;
 }
 
-function buildPanelComponents(config) {
-  return Object.values(positions).map(p => {
-    const open = isPositionOpen(p.key, config);
-    const button = new ButtonBuilder()
-      .setCustomId(`app_open:${p.key}`)
-      .setLabel(open ? `Apply for ${p.name}` : `${p.name} (Closed)`)
-      .setEmoji(open ? p.emoji : '🔒')
-      .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(!open);
+function buildPositionCardPayload(position, config) {
+  const open = isPositionOpen(position.key, config);
+  const statusText = open
+    ? '🟢 **Status: Open / Accepting Applications**'
+    : '🔴 **Status: Closed / Not Hiring At This Time**';
 
-    return new ActionRowBuilder().addComponents(button);
-  });
+  const embed = new EmbedBuilder()
+    .setTitle(`${position.emoji}  ${position.name}`)
+    .setColor(open ? 0x22c55e : 0x64748b)
+    .setDescription(
+      `${position.panelSummary}\n\n` +
+      `${statusText}\n\n` +
+      (open
+        ? `Click the button below to open your **private ${position.name} application ticket**.`
+        : `*Applications for this position are currently closed. Check back later.*`)
+    );
+
+  const button = new ButtonBuilder()
+    .setCustomId(`app_open:${position.key}`)
+    .setLabel(open ? `Apply for ${position.name}` : `${position.name} (Closed)`)
+    .setEmoji(open ? position.emoji : '🔒')
+    .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
+    .setDisabled(!open);
+
+  const row = new ActionRowBuilder().addComponents(button);
+
+  return { embeds: [embed], components: [row] };
 }
 
-// Creates the panel once, then edits it in place on every restart (no duplicates).
+// Creates the panel once (header + individual position cards with buttons directly underneath)
+// and edits them in place on restart/update without duplicate messages.
 async function sendOrUpdateApplicationPanel(client, config) {
   const channelId = config.applications?.panelChannelId;
   if (!channelId) {
@@ -298,34 +294,63 @@ async function sendOrUpdateApplicationPanel(client, config) {
   }
 
   try {
-    const payload = { embeds: [buildPanelEmbed(config, channel.guild)], components: buildPanelComponents(config) };
-
-    let panelMsg = null;
+    const positionKeys = Object.keys(positions); // ['content_creator', 'beta_tester', 'staff']
     const stored = await db.getPanelMessage(PANEL_KEY);
-    if (stored && stored.channelId === channel.id) {
-      panelMsg = await fetchMessageSafe(channel, stored.messageId);
-    }
 
-    // Fallback scan (DB reset / first run). Also removes duplicate panels posted by the bot.
-    const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-    if (recent) {
-      const botPanels = recent.filter(m => m.author.id === client.user.id && m.embeds[0]?.title === PANEL_TITLE);
-      if (!panelMsg && botPanels.size > 0) panelMsg = botPanels.last(); // oldest
-      for (const dup of botPanels.values()) {
-        if (panelMsg && dup.id !== panelMsg.id) await dup.delete().catch(() => {});
+    let headerMsg = null;
+    const cardMsgs = {};
+
+    // Check if card-style panel messages already exist
+    if (stored && stored.channelId === channel.id && stored.cards) {
+      if (stored.cards.header) {
+        headerMsg = await fetchMessageSafe(channel, stored.cards.header);
+      }
+      for (const key of positionKeys) {
+        if (stored.cards[key]) {
+          cardMsgs[key] = await fetchMessageSafe(channel, stored.cards[key]);
+        }
       }
     }
 
-    if (panelMsg) {
-      await panelMsg.edit(payload);
-      console.log(`[APPLICATIONS] Application panel updated in #${channel.name}`);
-    } else {
-      panelMsg = await channel.send(payload);
-      console.log(`[APPLICATIONS] Application panel posted in #${channel.name}`);
+    const allCardsExist = headerMsg && positionKeys.every(k => !!cardMsgs[k]);
+
+    if (allCardsExist) {
+      // Edit in place cleanly!
+      await headerMsg.edit({ embeds: [buildHeaderEmbed(config, channel.guild)] }).catch(() => {});
+      for (const key of positionKeys) {
+        const payload = buildPositionCardPayload(positions[key], config);
+        await cardMsgs[key].edit(payload).catch(() => {});
+      }
+      console.log(`[APPLICATIONS] Application cards updated in #${channel.name}`);
+      return headerMsg;
     }
 
-    await db.setPanelMessage(PANEL_KEY, channel.id, panelMsg.id);
-    return panelMsg;
+    // Cleanup any obsolete single-message panel or older cards in the channel
+    const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    if (recent) {
+      const oldBotMessages = recent.filter(m =>
+        m.author.id === client.user.id &&
+        (m.embeds[0]?.title === PANEL_TITLE || positionKeys.some(k => m.embeds[0]?.title?.includes(positions[k].name)))
+      );
+      for (const m of oldBotMessages.values()) {
+        await m.delete().catch(() => {});
+      }
+    }
+
+    // Post header message
+    headerMsg = await channel.send({ embeds: [buildHeaderEmbed(config, channel.guild)] });
+    const savedCardIds = { header: headerMsg.id };
+
+    // Post each position card with its button directly underneath
+    for (const key of positionKeys) {
+      const payload = buildPositionCardPayload(positions[key], config);
+      const sentCard = await channel.send(payload);
+      savedCardIds[key] = sentCard.id;
+    }
+
+    await db.setPanelMessage(PANEL_KEY, channel.id, headerMsg.id, { cards: savedCardIds });
+    console.log(`[APPLICATIONS] Application cards posted in #${channel.name}`);
+    return headerMsg;
   } catch (err) {
     console.error('[APPLICATIONS] Failed to send/update application panel:', err.message);
     return null;

@@ -539,9 +539,9 @@ async function getPanelMessage(key) {
   return dbData.panels[key] || null;
 }
 
-async function setPanelMessage(key, channelId, messageId) {
+async function setPanelMessage(key, channelId, messageId, meta = {}) {
   if (!dbData.panels) dbData.panels = {};
-  dbData.panels[key] = { channelId, messageId, updated_at: new Date().toISOString() };
+  dbData.panels[key] = { channelId, messageId, ...meta, updated_at: new Date().toISOString() };
   save();
 }
 

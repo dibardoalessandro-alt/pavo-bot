@@ -24,7 +24,6 @@ function buildLegitCheckEmbed(config, guild) {
       `**Visual Representation Guide (Examples):**\n` +
       `• **YES** → ✅ Verified Purchase / Trusted Service (e.g. **YES — 523**)\n` +
       `• **NO** → ❌ Dissatisfied / Unresolved Issue (e.g. **NO — 2**)\n\n` +
-      `*Note: The numeric indicators above serve purely as visual examples and placeholders for community ratings.*\n\n` +
       `────────────────────────────────────────────\n\n` +
       `### Do you trust Pavo Hub / Would you recommend our services?\n` +
       `*Cast your vote below to help maintain an honest and transparent community.*`

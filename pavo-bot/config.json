@@ -92,7 +92,7 @@
     "openPositions": {
       "content_creator": false,
       "beta_tester": true,
-      "staff": false
+      "staff": true
     },
     "pingRoles": {
       "content_creator": "Senior Supporter",

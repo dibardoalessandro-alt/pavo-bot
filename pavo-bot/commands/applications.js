@@ -233,8 +233,8 @@ function buildPanelEmbed(config, guild) {
     .setTitle(PANEL_TITLE)
     .setColor(brandColor(config))
     .setDescription(
-      'Pavo is growing, and we are expanding the team behind it.\n' +
-      'We are currently looking for dedicated members of the community to fill the following positions.\n\u200b'
+      'Pavo is expanding, and we are looking for dedicated members of the community to join our team.\n\n' +
+      'Review the available positions and their current status below:'
     )
     .addFields(
       ...Object.values(positions).map(p => {
@@ -258,7 +258,7 @@ function buildPanelEmbed(config, guild) {
       },
       {
         name: '\u200b',
-        value: 'Select a position below to open a **private application ticket**.'
+        value: 'Click an active button below to open your **private application ticket**.'
       }
     )
     .setFooter({ text: FOOTER_TEXT, iconURL: guild?.iconURL() || undefined })
@@ -269,21 +269,20 @@ function buildPanelEmbed(config, guild) {
   return embed;
 }
 
-function buildPanelRow(config) {
-  return new ActionRowBuilder().addComponents(
-    ...Object.values(positions).map(p => {
-      const open = isPositionOpen(p.key, config);
-      return new ButtonBuilder()
-        .setCustomId(`app_open:${p.key}`)
-        .setLabel(open ? p.name : `${p.name} (Closed)`)
-        .setEmoji(p.emoji)
-        .setStyle(open ? ButtonStyle.Primary : ButtonStyle.Secondary)
-        .setDisabled(!open);
-    })
-  );
+function buildPanelRows(config) {
+  return Object.values(positions).map(p => {
+    const open = isPositionOpen(p.key, config);
+    const button = new ButtonBuilder()
+      .setCustomId(`app_open:${p.key}`)
+      .setLabel(open ? `Apply for ${p.name}` : `${p.name} (Closed)`)
+      .setEmoji(open ? p.emoji : '🔒')
+      .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setDisabled(!open);
+    return new ActionRowBuilder().addComponents(button);
+  });
 }
 
-// Single clean unified panel message with all buttons on one row at the bottom
+// Single clean unified panel message with stacked vertical buttons at the bottom
 async function sendOrUpdateApplicationPanel(client, config) {
   const channelId = config.applications?.panelChannelId;
   if (!channelId) {
@@ -300,7 +299,7 @@ async function sendOrUpdateApplicationPanel(client, config) {
   try {
     const payload = {
       embeds: [buildPanelEmbed(config, channel.guild)],
-      components: [buildPanelRow(config)]
+      components: buildPanelRows(config)
     };
 
     let panelMsg = null;

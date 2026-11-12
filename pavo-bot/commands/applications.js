@@ -31,6 +31,7 @@ const {
 } = require('discord.js');
 const db = require('../database');
 const { positions, PARAGRAPH } = require('../applications.config');
+const { createChannelWithOverflow } = require('../utils/channelCategory');
 
 const PANEL_KEY = 'applications';
 const PANEL_TITLE = 'Pavo Team Applications';
@@ -372,16 +373,6 @@ function buildWelcomeEmbed(position, user, config, guild, ticketInfo) {
   return embed;
 }
 
-async function resolveParentCategory(guild, config) {
-  const targetId = config.applications?.categoryId || '1532385488554430575';
-  const candidates = [targetId, config.ticketCategoryId].filter(id => id && /^\d+$/.test(id));
-  for (const id of candidates) {
-    const category = guild.channels.cache.get(id) || await guild.channels.fetch(id).catch(() => null);
-    if (category && category.type === ChannelType.GuildCategory) return category.id;
-  }
-  return null;
-}
-
 async function findExistingApplicationChannel(guild, userId, type) {
   // 1) Database record
   const existing = await db.getUserOpenApplication(userId, type);
@@ -446,22 +437,13 @@ async function openApplicationTicket(interaction, config, type) {
       ...reviewerRoleIds.map(id => ({ id, allow: memberPerms }))
     ];
 
-    const channelOptions = {
+    const targetCategoryId = config.applications?.categoryId || '1532385488554430575';
+    channel = await createChannelWithOverflow(guild, [targetCategoryId, config.ticketCategoryId], {
       name: sanitizeChannelName(`${position.channelPrefix}-${user.username}`),
       type: ChannelType.GuildText,
-      parent: await resolveParentCategory(guild, config),
       permissionOverwrites,
       topic: `Pavo Application | Position: ${position.name} | Applicant: ${user.username} (${user.id}) | [pavo-app:${type}:${user.id}]`
-    };
-
-    try {
-      channel = await guild.channels.create(channelOptions);
-    } catch (createErr) {
-      // Category full / missing access → retry without a parent category
-      if (!channelOptions.parent) throw createErr;
-      console.warn('[APPLICATIONS] Channel creation in category failed, retrying without category:', createErr.message);
-      channel = await guild.channels.create({ ...channelOptions, parent: null });
-    }
+    });
 
     const initialState = { type, status: 'NOT_STARTED', answers: {}, next_page: 1 };
     const pseudoTicket = { application: initialState, status: 'OPEN' };

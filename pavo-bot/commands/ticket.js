@@ -13,6 +13,7 @@ const {
   StringSelectMenuOptionBuilder
 } = require('discord.js');
 const db = require('../database');
+const { createChannelWithOverflow } = require('../utils/channelCategory');
 
 // Helper to sanitize channel names to be valid Discord syntax
 function sanitizeChannelName(name) {
@@ -95,17 +96,10 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     }
   }
 
-  // Get ticket category
-  let parentCategory = null;
-  if (config.ticketCategoryId && config.ticketCategoryId.match(/^\d+$/)) {
-    parentCategory = config.ticketCategoryId;
-  }
-
-  // Create Channel
-  const channel = await guild.channels.create({
+  // Create Channel (automatically handles overflow categories if the 50-channel category limit is reached)
+  const channel = await createChannelWithOverflow(guild, [config.ticketCategoryId], {
     name: ticketName,
     type: ChannelType.GuildText,
-    parent: parentCategory,
     permissionOverwrites: permissionOverwrites,
     topic: `Support Ticket | Creator: ${user.username} (${user.id}) | Product: ${productName}`
   });

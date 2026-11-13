@@ -90,9 +90,9 @@
     "categoryId": "1532385488554430575",
     "logChannelId": "",
     "openPositions": {
-      "content_creator": false,
-      "beta_tester": true,
-      "staff": true
+      "content_creator": true,
+      "beta_tester": false,
+      "staff": false
     },
     "pingRoles": {
       "content_creator": "Senior Supporter",

@@ -4,6 +4,7 @@ const {
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle,
+  UserSelectMenuBuilder,
   PermissionFlagsBits 
 } = require('discord.js');
 const crypto = require('crypto');
@@ -167,6 +168,44 @@ function buildGiveawayButtons(giveawayId, disabled = false) {
   return new ActionRowBuilder().addComponents(enterBtn);
 }
 
+// Private ephemeral setup prompt shown ONLY to the giveaway creator
+function buildGiveawayCreatorSetupPayload(giveaway, statusNote = null) {
+  const maxWinners = Math.min(25, Math.max(1, giveaway.winnerCount || 1));
+  const presetList = Array.isArray(giveaway.presetWinners) && giveaway.presetWinners.length > 0
+    ? giveaway.presetWinners.map(id => `<@${id}>`).join(', ')
+    : '🎲 **Casuale** (verrà estratto automaticamente alla fine)';
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔒 Giveaway Setup (Solo tu vedi questo messaggio)')
+    .setColor('#4f46e5')
+    .setDescription(
+      `Il giveaway per **${giveaway.prize}** (ID: \`${giveaway.id}\`) è stato pubblicato nel canale.\n\n` +
+      `**Modalità attuale:** ${presetList}\n\n` +
+      `Scegli qui sotto se vuoi **decidere già il vincitore** dal menu oppure cliccare **Vincitore Casuale**:` +
+      (statusNote ? `\n\n${statusNote}` : '')
+    )
+    .setFooter({ text: 'Solo tu puoi vedere e modificare questa impostazione' });
+
+  const userSelect = new UserSelectMenuBuilder()
+    .setCustomId(`giveaway_preset_user_${giveaway.id}`)
+    .setPlaceholder('👑 Scegli il vincitore dal server...')
+    .setMinValues(1)
+    .setMaxValues(maxWinners);
+
+  const randomBtn = new ButtonBuilder()
+    .setCustomId(`giveaway_preset_random_${giveaway.id}`)
+    .setLabel('🎲 Vincitore Casuale')
+    .setStyle(ButtonStyle.Secondary);
+
+  return {
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(userSelect),
+      new ActionRowBuilder().addComponents(randomBtn)
+    ]
+  };
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('giveaway')
@@ -299,7 +338,7 @@ module.exports = {
       const giveawayId = crypto.randomBytes(4).toString('hex');
       const endsAt = new Date(Date.now() + durationMs).toISOString();
 
-      await interaction.deferReply();
+      await interaction.deferReply({ ephemeral: true });
 
       // Create giveaway entry in database
       const giveaway = await db.createGiveaway({
@@ -315,11 +354,11 @@ module.exports = {
         requireOAuth: requireOAuth
       });
 
-      // Build and post embed
+      // Build and post public embed in the channel
       const embed = buildGiveawayEmbed(giveaway, config);
       const row = buildGiveawayButtons(giveawayId, false);
 
-      const message = await interaction.editReply({
+      const message = await interaction.channel.send({
         embeds: [embed],
         components: [row]
       });
@@ -330,6 +369,9 @@ module.exports = {
 
       // Schedule auto-ending timer
       scheduleGiveawayEnd(interaction.client, giveaway, config);
+
+      // Show private winner-selection prompt ONLY to the creator
+      await interaction.editReply(buildGiveawayCreatorSetupPayload(giveaway));
 
       return;
     }
@@ -509,9 +551,71 @@ module.exports = {
   },
 
   // ==========================================
+  // USER SELECT MENU HANDLER (Creator-only preset winner)
+  // ==========================================
+  async handleUserSelect(interaction, config) {
+    if (!interaction.customId.startsWith('giveaway_preset_user_')) return;
+
+    const giveawayId = interaction.customId.replace('giveaway_preset_user_', '');
+    const giveaway = await db.getGiveaway(giveawayId);
+
+    if (!giveaway || giveaway.status !== 'ACTIVE') {
+      return interaction.reply({
+        content: '❌ Questo giveaway non è più attivo.',
+        ephemeral: true
+      });
+    }
+
+    if (interaction.user.id !== giveaway.creatorId && !isStaffMember(interaction.member, config)) {
+      return interaction.reply({
+        content: '❌ Solo chi ha creato il giveaway può modificare questa impostazione.',
+        ephemeral: true
+      });
+    }
+
+    const selectedIds = interaction.values || [];
+    const updated = await db.setGiveawayPresetWinners(giveawayId, selectedIds);
+    const mentions = selectedIds.map(id => `<@${id}>`).join(', ');
+
+    return interaction.update(
+      buildGiveawayCreatorSetupPayload(
+        updated || giveaway,
+        `✅ **Vincitore preimpostato:** ${mentions}\n*(Solo tu vedi questa conferma; puoi cambiarlo prima della fine)*`
+      )
+    );
+  },
+
+  // ==========================================
   // BUTTON INTERACTION HANDLER
   // ==========================================
   async handleButton(interaction, config) {
+    if (interaction.customId.startsWith('giveaway_preset_random_')) {
+      const giveawayId = interaction.customId.replace('giveaway_preset_random_', '');
+      const giveaway = await db.getGiveaway(giveawayId);
+
+      if (!giveaway || giveaway.status !== 'ACTIVE') {
+        return interaction.reply({
+          content: '❌ Questo giveaway non è più attivo.',
+          ephemeral: true
+        });
+      }
+
+      if (interaction.user.id !== giveaway.creatorId && !isStaffMember(interaction.member, config)) {
+        return interaction.reply({
+          content: '❌ Solo chi ha creato il giveaway può modificare questa impostazione.',
+          ephemeral: true
+        });
+      }
+
+      const updated = await db.setGiveawayPresetWinners(giveawayId, []);
+      return interaction.update(
+        buildGiveawayCreatorSetupPayload(
+          updated || giveaway,
+          '✅ **Modalità Casuale attivata:** il vincitore verrà estratto casualmente alla scadenza.'
+        )
+      );
+    }
+
     if (!interaction.customId.startsWith('giveaway_enter_')) return;
 
     const giveawayId = interaction.customId.replace('giveaway_enter_', '');
@@ -677,8 +781,18 @@ async function triggerGiveawayEnd(client, giveawayId, config, endedByUser = null
     activeTimers.delete(giveawayId);
   }
 
-  // Select winners
-  const winners = selectWinners(giveaway.participants, giveaway.winnerCount);
+  // Select winners (use creator's preset winners if configured, filling any extra slots randomly)
+  let winners;
+  if (Array.isArray(giveaway.presetWinners) && giveaway.presetWinners.length > 0) {
+    winners = [...new Set(giveaway.presetWinners)].slice(0, giveaway.winnerCount);
+    const remainingSlots = giveaway.winnerCount - winners.length;
+    if (remainingSlots > 0) {
+      const remainingPool = (giveaway.participants || []).filter(p => !winners.includes(p));
+      winners.push(...selectWinners(remainingPool, remainingSlots));
+    }
+  } else {
+    winners = selectWinners(giveaway.participants, giveaway.winnerCount);
+  }
 
   // Update DB
   const endedGiveaway = await db.endGiveaway(giveawayId, winners);

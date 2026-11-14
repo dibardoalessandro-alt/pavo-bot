@@ -87,6 +87,7 @@ async function createGiveaway(data) {
     requireOAuth: Boolean(data.requireOAuth),
     participants: [],
     winners: [],
+    presetWinners: Array.isArray(data.presetWinners) ? data.presetWinners : [],
     status: 'ACTIVE' // 'ACTIVE', 'ENDED', 'CANCELLED'
   };
   save();
@@ -98,6 +99,15 @@ async function updateGiveawayMessage(id, messageId) {
     dbData.giveaways[id].messageId = messageId;
     save();
   }
+}
+
+async function setGiveawayPresetWinners(id, userIds = []) {
+  if (dbData.giveaways[id]) {
+    dbData.giveaways[id].presetWinners = Array.isArray(userIds) ? userIds : [];
+    save();
+    return dbData.giveaways[id];
+  }
+  return null;
 }
 
 async function getGiveaway(id) {
@@ -1093,6 +1103,7 @@ module.exports = {
   deleteTicket,
   createGiveaway,
   updateGiveawayMessage,
+  setGiveawayPresetWinners,
   getGiveaway,
   getActiveGiveaways,
   getAllGiveaways,

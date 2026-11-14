@@ -477,6 +477,23 @@ client.on('interactionCreate', async interaction => {
       }
     }
   }
+
+  // 5. User Select Menus
+  else if (interaction.isUserSelectMenu()) {
+    if (interaction.customId.startsWith('giveaway_')) {
+      try {
+        await giveawayCmd.handleUserSelect(interaction, config);
+      } catch (err) {
+        console.error(`Error handling giveaway user select interaction:`, err);
+        const errMsg = { content: `❌ Error updating giveaway winner: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(errMsg).catch(() => {});
+        } else {
+          await interaction.reply(errMsg).catch(() => {});
+        }
+      }
+    }
+  }
 });
 
 // ============================================

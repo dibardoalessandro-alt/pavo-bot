@@ -129,13 +129,23 @@ client.once('ready', async () => {
   // Register commands
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
-    if (config.guildId && config.guildId !== "YOUR_GUILD_ID" && config.guildId.match(/^\d+$/)) {
-      console.log(`🔄 Refreshing commands for guild: ${config.guildId}...`);
-      await rest.put(
-        Routes.applicationGuildCommands(client.user.id, config.guildId),
-        { body: commandsJSON }
-      );
-      console.log('✅ Commands refreshed successfully for development guild.');
+    // Register commands in EVERY guild the bot is in (plus the configured guild), so new commands like /vouch always appear
+    const guildIds = new Set(client.guilds.cache.map(g => g.id));
+    if (config.guildId && config.guildId.match(/^\d+$/)) guildIds.add(config.guildId);
+
+    if (guildIds.size > 0) {
+      for (const gid of guildIds) {
+        try {
+          console.log(`🔄 Refreshing commands for guild: ${gid}...`);
+          await rest.put(
+            Routes.applicationGuildCommands(client.user.id, gid),
+            { body: commandsJSON }
+          );
+          console.log(`✅ Commands refreshed successfully for guild ${gid} (${commandsJSON.length} commands, /vouch included: ${commandsJSON.some(c => c.name === 'vouch')}).`);
+        } catch (guildErr) {
+          console.error(`❌ Failed to register commands for guild ${gid}:`, guildErr.message);
+        }
+      }
     } else {
       console.log('🔄 Guild ID not configured. Refreshing commands globally (may take up to an hour)...');
       await rest.put(

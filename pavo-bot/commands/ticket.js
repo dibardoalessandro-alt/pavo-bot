@@ -1,10 +1,10 @@
-const { 
-  SlashCommandBuilder, 
-  EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  ChannelType, 
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
   PermissionFlagsBits,
   ModalBuilder,
   TextInputBuilder,
@@ -62,7 +62,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
   }
 
   const ticketName = sanitizeChannelName(`${user.username}-${channelSuffix}`);
-  
+
   // Build Permission Overwrites
   const permissionOverwrites = [
     {
@@ -81,11 +81,18 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     }
   ];
 
-  // Add permissions for configured staff roles
-  for (const [roleName, roleId] of Object.entries(config.allStaffRoles || config.staffRoles)) {
-    if (roleId && roleId.match(/^\d+$/)) {
+  // Add permissions for configured staff roles + vouch roles
+  const staffAndVouchIds = new Set([
+    ...Object.values(config.allStaffRoles || config.staffRoles || {}),
+    config.vouchRoleId || '1532384602205851749',
+    ...(Array.isArray(config.vouchOnlyRoleIds) ? config.vouchOnlyRoleIds : []),
+    '1439210704291762258',
+    '1538244553637634118'
+  ]);
+  for (const roleId of staffAndVouchIds) {
+    if (roleId && String(roleId).match(/^\d+$/)) {
       permissionOverwrites.push({
-        id: roleId,
+        id: String(roleId),
         allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.SendMessages,
@@ -316,13 +323,13 @@ async function findWelcomeMessage(channel, ticketInfo) {
     // Fetch earliest messages in channel
     const firstMessages = await channel.messages.fetch({ after: channel.id, limit: 15 }).catch(() => null);
     if (firstMessages && firstMessages.size > 0) {
-      const found = firstMessages.find(m => m.embeds.length > 0 && m.embeds[0].title && m.embeds[0].title.includes('Ticket'));
+      const found = firstMessages.find(m => m.embeds.length > 0 && m.embeds[0].title && (m.embeds[0].title.includes('Ticket') || m.embeds[0].title.includes('Application')));
       if (found) return found;
     }
     // Fallback: search last 100 messages
     const recent = await channel.messages.fetch({ limit: 100 }).catch(() => null);
     if (recent && recent.size > 0) {
-      const found = recent.find(m => m.embeds.length > 0 && m.embeds[0].title && m.embeds[0].title.includes('Ticket'));
+      const found = recent.find(m => m.embeds.length > 0 && m.embeds[0].title && (m.embeds[0].title.includes('Ticket') || m.embeds[0].title.includes('Application')));
       if (found) return found;
     }
   } catch (err) {
@@ -341,10 +348,11 @@ async function resolveTicketAndOwner(channel, ticketInfo) {
     ownerId = String(ticketInfo.creator_id);
   }
 
-  // Fallback 1: inspect channel topic (e.g., "Support Ticket | Creator: user (123456789) | Product: ...")
+  // Fallback 1: inspect channel topic (e.g., "Support Ticket | Creator: user (123456789) | Product: ..." or "Pavo Application | ... Applicant: user (123456789)")
   if (!ownerId && channel?.topic) {
-    const topicMatch = channel.topic.match(/Creator:\s*([^\n(|]+?)\s*\((\d{15,22})\)/i) ||
-                       channel.topic.match(/\((\d{15,22})\)/);
+    const topicMatch = channel.topic.match(/(?:Creator|Applicant):\s*([^\n(|]+?)\s*\((\d{15,22})\)/i) ||
+      channel.topic.match(/\[pavo-app:[^:]+:(\d{15,22})\]/) ||
+      channel.topic.match(/\((\d{15,22})\)/);
     if (topicMatch) {
       if (topicMatch[2]) {
         ownerUsername = ownerUsername || topicMatch[1]?.trim() || 'Customer';
@@ -512,12 +520,22 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('reopen')
         .setDescription('Reopen the current closed ticket')
+    )
+    .addSubcommand(sub =>
+      sub.setName('vouch')
+        .setDescription('Move the current ticket to Awaiting Vouch and request a vouch')
     ),
 
-  // Slash command handler (/ticket close, /ticket delete, /ticket reopen)
+  // Slash command handler (/ticket close, /ticket delete, /ticket reopen, /ticket vouch)
   async execute(interaction, config) {
     const member = interaction.member;
     const channel = interaction.channel;
+    const subcommand = interaction.options.getSubcommand(false);
+
+    if (subcommand === 'vouch') {
+      return vouchCommand.execute(interaction, config);
+    }
+
     const staffRoleName = getStaffRoleName(member, config);
     const isStaff = staffRoleName !== null;
 
@@ -528,8 +546,6 @@ module.exports = {
       });
     }
 
-    const subcommand = interaction.options.getSubcommand(false);
-
     if (subcommand === 'delete') {
       return this.handleDeleteTicketAction(interaction, config, channel, member);
     } else if (subcommand === 'close') {
@@ -538,7 +554,7 @@ module.exports = {
       return this.handleReopenTicketAction(interaction, config, channel, member);
     } else {
       return interaction.reply({
-        content: 'ℹ️ Available commands: `/ticket close`, `/ticket delete`, `/ticket reopen`',
+        content: 'ℹ️ Available commands: `/ticket close`, `/ticket delete`, `/ticket reopen`, `/ticket vouch`',
         ephemeral: true
       });
     }
@@ -557,9 +573,9 @@ module.exports = {
     try {
       // Scan last 50 messages to see if panel already exists
       const messages = await channel.messages.fetch({ limit: 50 });
-      const panelExists = messages.some(msg => 
-        msg.author.id === client.user.id && 
-        msg.embeds.length > 0 && 
+      const panelExists = messages.some(msg =>
+        msg.author.id === client.user.id &&
+        msg.embeds.length > 0 &&
         msg.embeds[0].title === 'Pavo Support'
       );
 
@@ -592,6 +608,70 @@ module.exports = {
       console.log('🆕 Created new support ticket panel in channel: ' + channel.name);
     } catch (err) {
       console.error('Error during ticket panel initialization:', err);
+    }
+  },
+
+  // Ensure every existing ticket channel (any category/type) has the Vouch button on its welcome message
+  async ensureVouchButtonInExistingTickets(client, config) {
+    try {
+      const catIds = new Set([
+        config.ticketCategoryId,
+        config.ticketCategories?.orbsPcCategoryId,
+        config.ticketCategories?.pavoHubCategoryId,
+        config.ticketCategories?.supportCategoryId,
+        config.ticketCategories?.mmServiceCategoryId,
+        config.ticketCategories?.awaitingVouchCategoryId,
+        config.applications?.categoryId,
+        '1554856591239544913',
+        '1571585376815030272',
+        '1571585519270498429',
+        '1571586158452932729',
+        '1571597907537297499',
+        '1571588433288106194',
+        '1532385488554430575'
+      ].filter(Boolean));
+
+      let updatedCount = 0;
+      for (const guild of client.guilds.cache.values()) {
+        for (const channel of guild.channels.cache.values()) {
+          if (channel.type !== ChannelType.GuildText) continue;
+
+          const topic = String(channel.topic || '');
+          const isTicketByTopic = topic.includes('Support Ticket | Creator:') || topic.includes('Pavo Application |');
+          const inTicketCat = channel.parentId && catIds.has(channel.parentId);
+          if (!isTicketByTopic && !inTicketCat) continue;
+
+          const ticketInfo = await db.getTicket(channel.id);
+          if (!isTicketByTopic && !ticketInfo) continue;
+
+          const welcomeMsg = await findWelcomeMessage(channel, ticketInfo);
+          if (!welcomeMsg || welcomeMsg.author?.id !== client.user.id) continue;
+
+          const rows = (welcomeMsg.components || []).map(r => ActionRowBuilder.from(r));
+          const hasVouchBtn = rows.some(r => r.components.some(c => c.data?.custom_id === 'ticket_vouch'));
+          if (hasVouchBtn) continue;
+
+          const vouchBtn = new ButtonBuilder()
+            .setCustomId('ticket_vouch')
+            .setLabel('Vouch')
+            .setEmoji('⭐')
+            .setStyle(ButtonStyle.Secondary);
+
+          if (rows.length > 0 && rows[rows.length - 1].components.length < 5) {
+            rows[rows.length - 1].addComponents(vouchBtn);
+          } else if (rows.length < 5) {
+            rows.push(new ActionRowBuilder().addComponents(vouchBtn));
+          }
+
+          await welcomeMsg.edit({ components: rows }).catch(() => {});
+          updatedCount++;
+        }
+      }
+      if (updatedCount > 0) {
+        console.log(`⭐ [TICKETS] Added Vouch button to ${updatedCount} existing ticket channel(s).`);
+      }
+    } catch (err) {
+      console.warn('[TICKETS] Could not backfill Vouch button on existing tickets:', err.message);
     }
   },
 
@@ -758,7 +838,7 @@ module.exports = {
 
       try {
         const welcomeMessage = await findWelcomeMessage(channel, ticketInfo);
-        
+
         if (welcomeMessage) {
           const oldEmbed = welcomeMessage.embeds[0];
           if (oldEmbed) {
@@ -774,7 +854,7 @@ module.exports = {
             newRow.components[0].setDisabled(true);
             const extraRows = welcomeMessage.components.slice(1).map(r => ActionRowBuilder.from(r));
 
-            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [newRow, ...extraRows] }).catch(() => {});
+            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [newRow, ...extraRows] }).catch(() => { });
           }
         }
       } catch (e) {
@@ -921,8 +1001,13 @@ module.exports = {
     }
 
     try {
-      // Reopen & Delete buttons row (always present)
+      // Reopen, Vouch & Delete buttons row (always present)
       const closedRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('ticket_vouch')
+          .setLabel('Vouch')
+          .setEmoji('⭐')
+          .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId('ticket_reopen')
           .setLabel('Reopen Ticket')
@@ -983,9 +1068,9 @@ module.exports = {
         .setTimestamp();
 
       if (logChannel) {
-        await logChannel.send({ 
-          embeds: [logEmbed], 
-          files: [{ attachment: transcriptBuffer, name: `transcript-${channel.name}.txt` }] 
+        await logChannel.send({
+          embeds: [logEmbed],
+          files: [{ attachment: transcriptBuffer, name: `transcript-${channel.name}.txt` }]
         }).catch(err => console.error('Failed to send transcript log:', err));
       }
 
@@ -1015,7 +1100,7 @@ module.exports = {
                 ...oldEmbed.fields.filter(f => f.name !== '⏳ Status'),
                 { name: '⏳ Status', value: `🔒 Closed by <@${interaction.user.id}>`, inline: true }
               );
-            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [closedRow] }).catch(() => {});
+            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [closedRow] }).catch(() => { });
           }
         }
       } catch (welcomeErr) {
@@ -1053,9 +1138,9 @@ module.exports = {
 
     const deleteReply = { content: '🗑️ This ticket channel will be permanently deleted in 2 seconds...' };
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp(deleteReply).catch(() => {});
+      await interaction.followUp(deleteReply).catch(() => { });
     } else {
-      await interaction.reply(deleteReply).catch(() => {});
+      await interaction.reply(deleteReply).catch(() => { });
     }
 
     try {
@@ -1104,23 +1189,28 @@ module.exports = {
       const activeRow = isApp
         ? getApplications().buildControlsRow(ticketInfo)
         : new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId('ticket_claim')
-              .setLabel('Claim Ticket')
-              .setEmoji('📥')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(claimedBy !== null),
-            new ButtonBuilder()
-              .setCustomId('ticket_close')
-              .setLabel('Close Ticket')
-              .setEmoji('🔒')
-              .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-              .setCustomId('ticket_purchase')
-              .setLabel('Purchase Completed')
-              .setEmoji('💰')
-              .setStyle(ButtonStyle.Success)
-          );
+          new ButtonBuilder()
+            .setCustomId('ticket_claim')
+            .setLabel('Claim Ticket')
+            .setEmoji('📥')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(claimedBy !== null),
+          new ButtonBuilder()
+            .setCustomId('ticket_close')
+            .setLabel('Close Ticket')
+            .setEmoji('🔒')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId('ticket_purchase')
+            .setLabel('Purchase Completed')
+            .setEmoji('💰')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId('ticket_vouch')
+            .setLabel('Vouch')
+            .setEmoji('⭐')
+            .setStyle(ButtonStyle.Secondary)
+        );
 
       // Update welcome message if found
       try {
@@ -1136,7 +1226,7 @@ module.exports = {
                 ...oldEmbed.fields.filter(f => f.name !== '⏳ Status'),
                 { name: '⏳ Status', value: statusVal, inline: true }
               );
-            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [activeRow] }).catch(() => {});
+            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [activeRow] }).catch(() => { });
           }
         }
       } catch (welcomeErr) {
@@ -1257,7 +1347,7 @@ module.exports = {
               customerId = user.id;
               customerUsername = user.username;
             }
-          } catch (_) {}
+          } catch (_) { }
         } else {
           // Safe resolution by exact username match against ticket creator or guild members
           const ticketInfo = await db.getTicket(interaction.channelId);
@@ -1332,7 +1422,15 @@ module.exports = {
           .setFooter({ text: 'Pavo Tweak Sales Ledger' })
           .setTimestamp();
 
-        await interaction.editReply({ embeds: [saleEmbed] });
+        const saleVouchRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('ticket_vouch')
+            .setLabel('Vouch')
+            .setEmoji('⭐')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+        await interaction.editReply({ embeds: [saleEmbed], components: [saleVouchRow] });
 
         // Post in sales logs
         const logChannelId = config.ticketLogChannelId;
@@ -1362,17 +1460,17 @@ module.exports = {
     try {
       let allMessages = [];
       let lastId = null;
-      
+
       while (true) {
         const options = { limit: 100 };
         if (lastId) options.before = lastId;
-        
+
         const messages = await channel.messages.fetch(options);
         if (!messages || messages.size === 0) break;
-        
+
         allMessages.push(...messages.values());
         lastId = messages.lastKey();
-        
+
         if (messages.size < 100 || allMessages.length >= 500) break;
       }
 
@@ -1383,22 +1481,22 @@ module.exports = {
         const time = new Date(msg.createdTimestamp).toISOString().replace('T', ' ').substring(0, 19);
         const author = `${msg.author.tag} (${msg.author.id})`;
         let content = msg.content || "";
-        
+
         if (msg.attachments.size > 0) {
           const attachmentsList = msg.attachments.map(a => a.url).join(', ');
           content += ` [Attachments: ${attachmentsList}]`;
         }
-        
+
         if (msg.embeds.length > 0) {
           content += ` [Embed: ${msg.embeds.map(e => e.title || e.description || "").join(' | ')}]`;
         }
-        
+
         transcriptText += `[${time}] ${author}: ${content}\n`;
       }
     } catch (e) {
       transcriptText += `\n[ERROR GENERATING TRANSCRIPT]: ${e.message}\n`;
     }
-    
+
     return Buffer.from(transcriptText, 'utf-8');
   }
 };

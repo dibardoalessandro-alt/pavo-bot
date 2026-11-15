@@ -158,9 +158,10 @@ client.once('ready', async () => {
     console.error('❌ Failed to register slash commands:', error);
   }
 
-  // Send support ticket panel if configured
+  // Send support ticket panel if configured & backfill Vouch button on any existing open tickets
   try {
     await ticketCmd.sendTicketPanel(client, config);
+    await ticketCmd.ensureVouchButtonInExistingTickets(client, config);
   } catch (panelErr) {
     console.error('❌ Failed to initialize support ticket panel:', panelErr);
   }

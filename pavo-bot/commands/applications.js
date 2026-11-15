@@ -156,6 +156,11 @@ function buildControlsRow(ticketInfo) {
 
   row.addComponents(
     new ButtonBuilder()
+      .setCustomId('ticket_vouch')
+      .setLabel('Vouch')
+      .setEmoji('⭐')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
       .setCustomId('ticket_close')
       .setLabel('Close Ticket')
       .setEmoji('🔒')
@@ -422,7 +427,13 @@ async function openApplicationTicket(interaction, config, type) {
       return interaction.editReply({ content: `ℹ️ You already have an open **${position.name}** application: <#${existingChannel.id}>` });
     }
 
-    const reviewerRoleIds = getReviewerRoleIds(guild, config, type);
+    const reviewerRoleIds = [...new Set([
+      ...getReviewerRoleIds(guild, config, type),
+      config.vouchRoleId || '1532384602205851749',
+      ...(Array.isArray(config.vouchOnlyRoleIds) ? config.vouchOnlyRoleIds : []),
+      '1439210704291762258',
+      '1538244553637634118'
+    ].filter(id => id && /^\d+$/.test(String(id))))];
     const memberPerms = [
       PermissionFlagsBits.ViewChannel,
       PermissionFlagsBits.SendMessages,

@@ -14,6 +14,7 @@ const {
 } = require('discord.js');
 const db = require('../database');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
+const dmNotifier = require('../utils/dmNotifier');
 
 // Helper to sanitize channel names to be valid Discord syntax
 function sanitizeChannelName(name) {
@@ -175,6 +176,17 @@ async function createTicketChannel(interaction, config, productName, channelSuff
   await db.createTicket(channel.id, user.id, user.username, welcomeMsg.id, {
     kind: options.kind || 'support',
     product: productName
+  });
+
+  // Automatically notify the member via DM that their ticket has been opened
+  await dmNotifier.notifyTicketOpened({
+    client: interaction.client,
+    guild,
+    config,
+    userId: user.id,
+    channel,
+    productName,
+    kind: options.kind || 'support'
   });
 
   return channel;
@@ -495,10 +507,13 @@ module.exports = {
         return interaction.reply({ content: '❌ Only staff members can claim tickets.', ephemeral: true });
       }
 
+      const prevTicket = await db.getTicket(channel.id);
+      const alreadyClaimedBySame = prevTicket && prevTicket.claimed_by === interaction.user.id;
+
       await db.claimTicket(channel.id, interaction.user.id, interaction.user.username);
+      const ticketInfo = await db.getTicket(channel.id);
 
       try {
-        const ticketInfo = await db.getTicket(channel.id);
         const welcomeMessage = await findWelcomeMessage(channel, ticketInfo);
         
         if (welcomeMessage) {
@@ -523,6 +538,19 @@ module.exports = {
       }
 
       await interaction.reply({ content: `📥 <@${interaction.user.id}> has claimed this ticket!` });
+
+      // Automatically notify the ticket owner via DM (avoiding duplicates)
+      if (!alreadyClaimedBySame && ticketInfo?.creator_id) {
+        await dmNotifier.notifyTicketClaimed({
+          client: interaction.client,
+          guild: interaction.guild,
+          config,
+          userId: ticketInfo.creator_id,
+          channel,
+          staffUser: interaction.user,
+          productName: ticketInfo.product
+        });
+      }
     }
 
     // BUTTON: Close Ticket (Read-only status)
@@ -580,7 +608,8 @@ module.exports = {
         return interaction.reply({ content: '❌ Only staff members can record verified purchases.', ephemeral: true });
       }
 
-      // Show Purchase Completed Modal
+      // Show Purchase Completed Modal (pre-filling ticket owner ID if available)
+      const currentTicket = await db.getTicket(channel.id);
       const modal = new ModalBuilder()
         .setCustomId('ticket_purchase_modal')
         .setTitle('Record Verified Purchase');
@@ -591,6 +620,10 @@ module.exports = {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('e.g., 123456789012345678 or username')
         .setRequired(true);
+
+      if (currentTicket?.creator_id && /^\d+$/.test(String(currentTicket.creator_id))) {
+        customerInput.setValue(String(currentTicket.creator_id));
+      }
 
       const productInput = new TextInputBuilder()
         .setCustomId('product_input')
@@ -705,6 +738,21 @@ module.exports = {
           embeds: [logEmbed], 
           files: [{ attachment: transcriptBuffer, name: `transcript-${channel.name}.txt` }] 
         }).catch(err => console.error('Failed to send transcript log:', err));
+      }
+
+      // Automatically send Ticket Closed DM + Transcript attachment to the ticket creator
+      if (creatorId && creatorId !== 'Unknown') {
+        await dmNotifier.notifyTicketClosed({
+          client: interaction.client,
+          guild: interaction.guild,
+          config,
+          userId: creatorId,
+          channel,
+          closedByUser: interaction.user,
+          claimedById: claimedBy,
+          productName: ticketInfo?.product || (ticketInfo?.kind === 'application' ? 'Team Application' : 'Support'),
+          transcriptBuffer
+        });
       }
 
       // Update welcome message embed and buttons if found
@@ -952,7 +1000,7 @@ module.exports = {
         let customerId = 'Unknown';
         let customerUsername = customerVal;
 
-        const cleanedId = customerVal.replace(/[<@!>]/g, '');
+        const cleanedId = customerVal.replace(/[<@!>]/g, '').trim();
         if (cleanedId.match(/^\d+$/)) {
           try {
             const user = await interaction.client.users.fetch(cleanedId);
@@ -961,9 +1009,28 @@ module.exports = {
               customerUsername = user.username;
             }
           } catch (_) {}
+        } else {
+          // Safe resolution by exact username match against ticket creator or guild members
+          const ticketInfo = await db.getTicket(interaction.channelId);
+          if (
+            ticketInfo?.creator_id &&
+            /^\d+$/.test(String(ticketInfo.creator_id)) &&
+            String(ticketInfo.creator_username || '').toLowerCase() === cleanedId.toLowerCase()
+          ) {
+            customerId = String(ticketInfo.creator_id);
+            customerUsername = ticketInfo.creator_username;
+          } else if (interaction.guild) {
+            const matchMember = interaction.guild.members.cache.find(
+              m => !m.user.bot && m.user.username.toLowerCase() === cleanedId.toLowerCase()
+            );
+            if (matchMember) {
+              customerId = matchMember.id;
+              customerUsername = matchMember.user.username;
+            }
+          }
         }
 
-        await db.recordSale(
+        const saleRecord = await db.recordSale(
           customerId,
           customerUsername,
           interaction.user.id,
@@ -974,6 +1041,33 @@ module.exports = {
           interaction.channelId,
           commission
         );
+
+        // Automatically notify the customer via DM: Payment Received + Purchase Completed
+        if (customerId && customerId !== 'Unknown') {
+          await dmNotifier.notifyPaymentReceived({
+            client: interaction.client,
+            guild: interaction.guild,
+            config,
+            userId: customerId,
+            transactionId: saleRecord?.sale_id,
+            product,
+            price,
+            paymentMethod,
+            staffUser: interaction.user
+          });
+          await dmNotifier.notifyPurchaseCompleted({
+            client: interaction.client,
+            guild: interaction.guild,
+            config,
+            userId: customerId,
+            transactionId: saleRecord?.sale_id,
+            product,
+            price,
+            paymentMethod,
+            staffUser: interaction.user,
+            channelId: interaction.channelId
+          });
+        }
 
         const saleEmbed = new EmbedBuilder()
           .setTitle('✅ Purchase Confirmed & Logged')

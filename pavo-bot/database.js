@@ -551,9 +551,10 @@ async function closeTicket(ticketId, staffId, staffUsername) {
 async function recordSale(customerId, customerUsername, staffId, staffUsername, product, price, paymentMethod, ticketId, commission) {
   await ensureStaffExists(staffId, staffUsername);
   const now = new Date().toISOString();
+  const maxSaleId = dbData.sales.reduce((max, s) => Math.max(max, Number(s.sale_id || 0)), 0);
 
   const sale = {
-    sale_id: dbData.sales.length + 1,
+    sale_id: maxSaleId + 1,
     customer_id: customerId,
     customer_username: customerUsername,
     staff_id: staffId,
@@ -572,6 +573,8 @@ async function recordSale(customerId, customerUsername, staffId, staffUsername, 
   dbData.staff[staffId].total_earnings = Number(dbData.staff[staffId].total_earnings || 0) + commission;
   dbData.staff[staffId].last_active_at = now;
   storage.upsertStaff(dbData.staff[staffId]);
+
+  return sale;
 }
 
 async function getRoleCommissionPercentage(roleName, configDefaults) {
@@ -587,17 +590,44 @@ async function setRoleCommissionPercentage(roleName, percentage) {
 }
 
 async function getSalesStats() {
-  const total_sales = dbData.sales.length;
-  const total_revenue = dbData.sales.reduce((acc, s) => acc + (s.price || 0), 0);
-  const total_commissions = dbData.sales.reduce((acc, s) => acc + (s.commission || 0), 0);
+  const count = dbData.sales.length;
+  const revenue = dbData.sales.reduce((acc, s) => acc + (s.price || 0), 0);
+  const commissions = dbData.sales.reduce((acc, s) => acc + (s.commission || 0), 0);
 
-  return { total_sales, total_revenue, total_commissions };
+  const methodMap = {};
+  for (const s of dbData.sales) {
+    const method = s.payment_method || 'Other';
+    if (!methodMap[method]) methodMap[method] = { payment_method: method, count: 0, revenue: 0 };
+    methodMap[method].count += 1;
+    methodMap[method].revenue += Number(s.price || 0);
+  }
+
+  return {
+    count,
+    revenue,
+    commissions,
+    byMethod: Object.values(methodMap),
+    total_sales: count,
+    total_revenue: revenue,
+    total_commissions: commissions
+  };
 }
 
 async function getSalesByUser(staffId) {
-  return dbData.sales
+  const list = dbData.sales
     .filter(s => s.staff_id === staffId)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const count = list.length;
+  const revenue = list.reduce((acc, s) => acc + Number(s.price || 0), 0);
+  const commission = list.reduce((acc, s) => acc + Number(s.commission || 0), 0);
+
+  return {
+    count,
+    revenue,
+    commission,
+    recent: list.slice(0, 10)
+  };
 }
 
 async function getSalesLeaderboard() {
@@ -606,14 +636,17 @@ async function getSalesLeaderboard() {
     if (!staffMap[sale.staff_id]) {
       const staffInfo = dbData.staff[sale.staff_id];
       staffMap[sale.staff_id] = {
+        staff_id: sale.staff_id,
         discord_id: sale.staff_id,
         username: staffInfo ? staffInfo.username : 'Unknown Staff',
         sales_count: 0,
+        revenue: 0,
         total_revenue: 0,
         total_earnings: 0
       };
     }
     staffMap[sale.staff_id].sales_count += 1;
+    staffMap[sale.staff_id].revenue += (sale.price || 0);
     staffMap[sale.staff_id].total_revenue += (sale.price || 0);
     staffMap[sale.staff_id].total_earnings += (sale.commission || 0);
   }

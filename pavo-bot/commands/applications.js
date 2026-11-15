@@ -32,6 +32,7 @@ const {
 const db = require('../database');
 const { positions, PARAGRAPH } = require('../applications.config');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
+const dmNotifier = require('../utils/dmNotifier');
 
 const PANEL_KEY = 'applications';
 const PANEL_TITLE = 'Pavo Team Applications';
@@ -457,7 +458,18 @@ async function openApplicationTicket(interaction, config, type) {
 
     await db.createTicket(channel.id, user.id, user.username, welcomeMsg.id, {
       kind: 'application',
+      product: `${position.name} Application`,
       application: initialState
+    });
+
+    await dmNotifier.notifyTicketOpened({
+      client: interaction.client,
+      guild,
+      config,
+      userId: user.id,
+      channel,
+      productName: `${position.name} Application`,
+      kind: 'application'
     });
 
     return interaction.editReply({ content: `✅ Your **${position.name}** application ticket has been created: <#${channel.id}>` });

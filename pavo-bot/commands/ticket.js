@@ -378,10 +378,15 @@ const vouchCommand = {
     .setDescription('Move a completed customer ticket to Awaiting Vouch and request a vouch'),
 
   async execute(interaction, config) {
-    const authorizedRoleId = config.vouchRoleId || '1532384602205851749';
+    const authorizedRoleIds = [...new Set([
+      config.vouchRoleId || '1532384602205851749',
+      ...(Array.isArray(config.vouchRoleIds) ? config.vouchRoleIds : []),
+      '1532384602205851749',
+      '1439210704291762258'
+    ])];
     const member = interaction.member;
 
-    if (!member || !member.roles || !member.roles.cache.has(authorizedRoleId)) {
+    if (!member || !member.roles || !authorizedRoleIds.some(id => member.roles.cache.has(id))) {
       return interaction.reply({
         content: '❌ Permission denied. You are not authorized to use `/vouch`.',
         ephemeral: true

@@ -38,6 +38,19 @@ let mode = 'sqlite'; // 'sqlite' | 'postgres'
 let sqlite = null;
 let pgPool = null;
 let writeQueue = Promise.resolve();
+let onWriteCallback = null;
+
+function setOnWrite(cb) {
+  onWriteCallback = typeof cb === 'function' ? cb : null;
+}
+
+function notifyWrite() {
+  if (onWriteCallback) {
+    try {
+      onWriteCallback();
+    } catch (_) {}
+  }
+}
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -523,6 +536,7 @@ function upsertStaff(s) {
       ]
     ));
   }
+  notifyWrite();
 }
 
 function upsertTicket(t) {
@@ -581,6 +595,7 @@ function upsertTicket(t) {
       ]
     ));
   }
+  notifyWrite();
 }
 
 function insertSale(sale) {
@@ -610,6 +625,7 @@ function insertSale(sale) {
       ]
     ));
   }
+  notifyWrite();
 }
 
 function upsertCommission(roleName, percentage) {
@@ -625,6 +641,7 @@ function upsertCommission(roleName, percentage) {
       [roleName, percentage]
     ));
   }
+  notifyWrite();
 }
 
 function upsertGiveaway(g) {
@@ -699,6 +716,7 @@ function upsertGiveaway(g) {
       ]
     ));
   }
+  notifyWrite();
 }
 
 function insertGiveawayParticipant(giveawayId, userId) {
@@ -714,6 +732,7 @@ function insertGiveawayParticipant(giveawayId, userId) {
       [giveawayId, userId, now]
     ));
   }
+  notifyWrite();
 }
 
 function upsertLegitCheckPoll(channelId, messageId) {
@@ -729,6 +748,7 @@ function upsertLegitCheckPoll(channelId, messageId) {
       [channelId || null, messageId || null]
     ));
   }
+  notifyWrite();
 }
 
 function upsertLegitCheckVote(userId, vote) {
@@ -745,6 +765,7 @@ function upsertLegitCheckVote(userId, vote) {
       [userId, vote, now]
     ));
   }
+  notifyWrite();
 }
 
 function upsertJsonRow(table, keyCol, keyVal, dataObj) {
@@ -761,6 +782,7 @@ function upsertJsonRow(table, keyCol, keyVal, dataObj) {
       [keyVal, json]
     ));
   }
+  notifyWrite();
 }
 
 function deleteRow(table, keyCol, keyVal) {
@@ -769,6 +791,7 @@ function deleteRow(table, keyCol, keyVal) {
   } else {
     enqueuePg(() => pgPool.query(`DELETE FROM ${table} WHERE ${keyCol} = $1`, [keyVal]));
   }
+  notifyWrite();
 }
 
 function upsertOAuthState(s) {
@@ -784,6 +807,7 @@ function upsertOAuthState(s) {
       [s.state, s.userId || null, s.giveawayId || null, s.createdAt]
     ));
   }
+  notifyWrite();
 }
 
 function upsertWarning(w) {
@@ -800,6 +824,7 @@ function upsertWarning(w) {
       [w.id, w.userId, json]
     ));
   }
+  notifyWrite();
 }
 
 function clearWarningsByUser(userId) {
@@ -808,6 +833,7 @@ function clearWarningsByUser(userId) {
   } else {
     enqueuePg(() => pgPool.query('DELETE FROM warnings WHERE user_id = $1', [userId]));
   }
+  notifyWrite();
 }
 
 function upsertServerConfig(key, value) {
@@ -824,6 +850,7 @@ function upsertServerConfig(key, value) {
       [key, json]
     ));
   }
+  notifyWrite();
 }
 
 // ============================================
@@ -1164,6 +1191,7 @@ function getStorageInfo() {
 
 module.exports = {
   initStorage,
+  setOnWrite,
   flush,
   createSqliteBackup,
   getStorageInfo,

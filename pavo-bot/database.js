@@ -1,4 +1,5 @@
 const storage = require('./db/storage');
+const cloudSync = require('./db/cloudSync');
 
 // In-memory read cache hydrated from persistent SQLite / PostgreSQL on startup.
 // Every write immediately persists to the underlying database.
@@ -49,6 +50,153 @@ async function initDatabase() {
   resetMemoryCache();
   const info = await storage.initStorage(dbData);
   return info;
+}
+
+// Non-destructively merges a Discord cloud snapshot into local DB + memory
+async function mergeCloudSnapshot(wrapper) {
+  const snap = wrapper?.data || wrapper;
+  if (!snap || typeof snap !== 'object') return;
+
+  // Pause cloud-sync write trigger during bulk restore
+  storage.setOnWrite(null);
+  try {
+    for (const [id, s] of Object.entries(snap.staff || {})) {
+      const cur = dbData.staff[id] || {};
+      const merged = {
+        discord_id: id,
+        username: s.username || cur.username || 'Unknown',
+        tickets_opened: Math.max(cur.tickets_opened || 0, s.tickets_opened || 0),
+        tickets_claimed: Math.max(cur.tickets_claimed || 0, s.tickets_claimed || 0),
+        tickets_closed: Math.max(cur.tickets_closed || 0, s.tickets_closed || 0),
+        tickets_handled: Math.max(cur.tickets_handled || 0, s.tickets_handled || 0),
+        sales_count: Math.max(cur.sales_count || 0, s.sales_count || 0),
+        total_earnings: Math.max(Number(cur.total_earnings || 0), Number(s.total_earnings || 0)),
+        join_date: cur.join_date || s.join_date || null,
+        last_active_at: s.last_active_at || cur.last_active_at || null
+      };
+      dbData.staff[id] = merged;
+      storage.upsertStaff(merged);
+    }
+
+    for (const [tid, t] of Object.entries(snap.tickets || {})) {
+      if (!dbData.tickets[tid]) {
+        dbData.tickets[tid] = t;
+        storage.upsertTicket(t);
+      } else {
+        // Prefer more advanced status (DELETED > CLOSED > OPEN)
+        const rank = { OPEN: 1, CLOSED: 2, DELETED: 3 };
+        if ((rank[t.status] || 0) >= (rank[dbData.tickets[tid].status] || 0)) {
+          dbData.tickets[tid] = { ...dbData.tickets[tid], ...t };
+          storage.upsertTicket(dbData.tickets[tid]);
+        }
+      }
+    }
+
+    const existingSaleIds = new Set(dbData.sales.map(s => s.sale_id));
+    for (const sale of (snap.sales || [])) {
+      if (!existingSaleIds.has(sale.sale_id)) {
+        dbData.sales.push(sale);
+        existingSaleIds.add(sale.sale_id);
+        storage.insertSale(sale);
+      }
+    }
+
+    for (const [role, pct] of Object.entries(snap.commission_percentages || {})) {
+      if (dbData.commission_percentages[role] === undefined) {
+        dbData.commission_percentages[role] = pct;
+        storage.upsertCommission(role, pct);
+      }
+    }
+
+    for (const [gid, g] of Object.entries(snap.giveaways || {})) {
+      const cur = dbData.giveaways[gid];
+      const mergedParticipants = [...new Set([...(cur?.participants || []), ...(g.participants || [])])];
+      const merged = {
+        ...(cur || {}),
+        ...g,
+        participants: mergedParticipants,
+        presetWinners: (cur?.presetWinners?.length ? cur.presetWinners : g.presetWinners) || []
+      };
+      if (cur?.status === 'ENDED' || cur?.status === 'CANCELLED') {
+        merged.status = cur.status;
+        merged.winners = cur.winners?.length ? cur.winners : (g.winners || []);
+      }
+      dbData.giveaways[gid] = merged;
+      storage.upsertGiveaway(merged);
+      for (const uid of mergedParticipants) {
+        storage.insertGiveawayParticipant(gid, uid);
+      }
+    }
+
+    if (snap.legit_check_poll) {
+      if (!dbData.legit_check_poll) {
+        dbData.legit_check_poll = { messageId: null, channelId: '1546615108325736558', votes: {} };
+      }
+      if (snap.legit_check_poll.messageId && !dbData.legit_check_poll.messageId) {
+        dbData.legit_check_poll.messageId = snap.legit_check_poll.messageId;
+      }
+      if (snap.legit_check_poll.channelId) {
+        dbData.legit_check_poll.channelId = snap.legit_check_poll.channelId;
+      }
+      storage.upsertLegitCheckPoll(dbData.legit_check_poll.channelId, dbData.legit_check_poll.messageId);
+
+      for (const [uid, vote] of Object.entries(snap.legit_check_poll.votes || {})) {
+        if (!dbData.legit_check_poll.votes[uid]) {
+          dbData.legit_check_poll.votes[uid] = vote;
+          storage.upsertLegitCheckVote(uid, vote);
+        }
+      }
+    }
+
+    const mergeKeyedTable = (field, table, keyCol) => {
+      for (const [k, v] of Object.entries(snap[field] || {})) {
+        if (!dbData[field][k]) {
+          dbData[field][k] = v;
+          storage.upsertJsonRow(table, keyCol, k, v);
+        }
+      }
+    };
+
+    mergeKeyedTable('oauth_users', 'oauth_users', 'discord_id');
+    mergeKeyedTable('licenses', 'licenses', 'key_str');
+    mergeKeyedTable('balances', 'balances', 'user_id');
+    mergeKeyedTable('gamestats', 'gamestats', 'user_id');
+    mergeKeyedTable('rule_acceptances', 'rule_acceptances', 'user_id');
+    mergeKeyedTable('profiles', 'profiles', 'user_id');
+    mergeKeyedTable('panels', 'panels', 'panel_key');
+
+    const existingTxIds = new Set(dbData.transactions.map(t => t.id));
+    for (const tx of (snap.transactions || [])) {
+      if (tx?.id && !existingTxIds.has(tx.id)) {
+        dbData.transactions.push(tx);
+        existingTxIds.add(tx.id);
+        storage.upsertJsonRow('transactions', 'id', tx.id, tx);
+      }
+    }
+
+    const existingWarnIds = new Set(dbData.warnings.map(w => w.id));
+    for (const w of (snap.warnings || [])) {
+      if (w?.id && !existingWarnIds.has(w.id)) {
+        dbData.warnings.push(w);
+        existingWarnIds.add(w.id);
+        storage.upsertWarning(w);
+      }
+    }
+
+    await storage.flush();
+  } finally {
+    storage.setOnWrite(cloudSync.scheduleCloudSync);
+  }
+}
+
+async function initCloudSync(client, config) {
+  await cloudSync.restoreFromCloud(client, config, mergeCloudSnapshot, () => dbData);
+  storage.setOnWrite(cloudSync.scheduleCloudSync);
+}
+
+async function flushDatabase() {
+  await storage.flush();
+  await cloudSync.flushCloudSync();
 }
 
 // ============================================
@@ -1050,7 +1198,8 @@ async function getUserProfile(userId) {
 
 module.exports = {
   initDatabase,
-  flushDatabase: storage.flush,
+  initCloudSync,
+  flushDatabase,
   createBackup: storage.createSqliteBackup,
   getStorageInfo: storage.getStorageInfo,
   ensureStaffExists,

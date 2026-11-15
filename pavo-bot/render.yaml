@@ -1,6 +1,13 @@
 # Render Blueprint - Pavo Discord Bot
 # https://render.com/docs/blueprint-spec
 
+databases:
+  - name: pavo-db
+    plan: free
+    region: frankfurt
+    databaseName: pavo_bot
+    user: pavo_bot
+
 services:
   - type: web
     name: pavo-bot
@@ -11,10 +18,12 @@ services:
     startCommand: node index.js
     envVars:
       - key: DISCORD_TOKEN
-        sync: false  # Must be set manually in the Render dashboard
+        sync: false  # Set in Render dashboard
       - key: DATABASE_URL
-        sync: false  # Recommended on Render Free Plan: PostgreSQL connection string (Render Postgres / Neon / Supabase)
+        fromDatabase:
+          name: pavo-db
+          property: connectionString
       - key: DATA_DIR
-        value: /var/data  # Used for SQLite if a Render Persistent Disk is mounted at /var/data (ignored if DATABASE_URL is set or falls back to ./data)
+        value: /var/data
       - key: NODE_ENV
         value: production

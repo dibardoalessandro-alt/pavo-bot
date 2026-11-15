@@ -109,14 +109,15 @@ client.once('ready', async () => {
   console.log(`🤖 Pavo Bot logged in as: ${client.user.tag}`);
   console.log("=========================================");
 
-  // Initialize Database
+  // Initialize Database & Cloud Snapshot Sync
   try {
     const storageInfo = await db.initDatabase();
+    await db.initCloudSync(client, config);
     const staffList = await db.getAllStaffStats();
     const activeGiveaways = await db.getActiveGiveaways();
     const legitData = await db.getLegitCheckData();
     console.log(
-      `📊 [RECOVERY] Mode=${storageInfo.mode.toUpperCase()} | Staff=${staffList.length} | ` +
+      `📊 [RECOVERY] Mode=${storageInfo.mode.toUpperCase()}+CLOUD | Staff=${staffList.length} | ` +
       `ActiveGiveaways=${activeGiveaways.length} | LegitVotes=${Object.keys(legitData.votes || {}).length}`
     );
   } catch (dbErr) {

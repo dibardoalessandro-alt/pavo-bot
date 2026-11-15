@@ -382,7 +382,8 @@ const vouchCommand = {
       config.vouchRoleId || '1532384602205851749',
       ...(Array.isArray(config.vouchRoleIds) ? config.vouchRoleIds : []),
       '1532384602205851749',
-      '1439210704291762258'
+      '1439210704291762258',
+      '1538244553637634118'
     ])];
     const member = interaction.member;
 

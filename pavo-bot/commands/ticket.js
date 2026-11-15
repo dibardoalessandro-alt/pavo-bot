@@ -207,7 +207,6 @@ function getPurchaseCategories(config) {
 
 // Support & service ticket categories
 const SUPPORT_TYPES = {
-  '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1', label: '1v1 Issue', emoji: '⚔️', description: 'Match disputes and 1v1 issues' },
   key_license: { title: 'Key / License Support', suffix: 'license', label: 'Key / License', emoji: '🔑', description: 'License key activation, redemption and issues' },
   report_issue: { title: 'Member Report', suffix: 'report', label: 'Report', emoji: '🚨', description: 'Report a member or server incident' },
   other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Other questions or assistance' },
@@ -217,7 +216,6 @@ const SUPPORT_TYPES = {
 
 // Exact ticket menu order
 const TICKET_MENU_ORDER = [
-  '1v1_issue',
   'key_license',
   'report_issue',
   'other_support',

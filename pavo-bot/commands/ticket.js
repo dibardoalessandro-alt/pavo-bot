@@ -161,12 +161,21 @@ async function createTicketChannel(interaction, config, productName, channelSuff
       .setStyle(ButtonStyle.Success)
   );
 
+  // Second row: Vouch button (staff with vouch access only)
+  const vouchRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('ticket_vouch')
+      .setLabel('Vouch')
+      .setEmoji('⭐')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
   // Send greeting tagging the user and the first staff role
   const pingRoleId = Object.values(config.staffRoles).filter(id => id.match(/^\d+$/))[0];
   const welcomeMsg = await channel.send({
     content: `<@${user.id}>${pingRoleId ? ` | <@&${pingRoleId}>` : ''}`,
     embeds: [welcomeEmbed],
-    components: [row]
+    components: [row, vouchRow]
   });
 
   // Track staff-opened tickets if creator is a staff member
@@ -763,8 +772,9 @@ module.exports = {
             const originalRow = welcomeMessage.components[0];
             const newRow = ActionRowBuilder.from(originalRow);
             newRow.components[0].setDisabled(true);
+            const extraRows = welcomeMessage.components.slice(1).map(r => ActionRowBuilder.from(r));
 
-            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [newRow] }).catch(() => {});
+            await welcomeMessage.edit({ embeds: [updatedEmbed], components: [newRow, ...extraRows] }).catch(() => {});
           }
         }
       } catch (e) {
@@ -824,6 +834,11 @@ module.exports = {
 
       modal.addComponents(new ActionRowBuilder().addComponents(userInput));
       await interaction.showModal(modal);
+    }
+
+    // BUTTON: Vouch (moves ticket to Awaiting Vouch + sends vouch request)
+    else if (customId === 'ticket_vouch') {
+      await vouchCommand.execute(interaction, config);
     }
 
     // BUTTON: Reopen Ticket

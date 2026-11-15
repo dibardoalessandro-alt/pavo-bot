@@ -166,6 +166,11 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     components: [row]
   });
 
+  // Track staff-opened tickets if creator is a staff member
+  if (interaction.member && getStaffRoleName(interaction.member, config)) {
+    await db.ensureStaffExists(user.id, user.username);
+  }
+
   // Save to persistent DB with welcome message ID for reliable lookup
   await db.createTicket(channel.id, user.id, user.username, welcomeMsg.id, {
     kind: options.kind || 'support',

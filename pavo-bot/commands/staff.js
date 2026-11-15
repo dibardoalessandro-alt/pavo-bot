@@ -167,6 +167,10 @@ module.exports = {
           dbInfo = await db.getStaffInfo(user.id);
         }
 
+        const lastActiveText = dbInfo.last_active_at
+          ? `<t:${Math.floor(new Date(dbInfo.last_active_at).getTime() / 1000)}:R>`
+          : 'N/A';
+
         const infoEmbed = new EmbedBuilder()
           .setTitle(`👤 Staff Profile: ${user.username}`)
           .setColor(config.embedColor || '#4f46e5')
@@ -175,11 +179,15 @@ module.exports = {
             { name: 'Discord Account', value: `<@${user.id}>\nUsername: \`${user.username}\`\nID: \`${user.id}\``, inline: false },
             { name: '🛡️ Staff Role', value: `**${currentRole}**`, inline: true },
             { name: '📅 Date Joined Staff', value: dbInfo.join_date || 'Unknown', inline: true },
-            { name: '🎟️ Tickets Handled', value: `\`${dbInfo.tickets_handled}\``, inline: true },
-            { name: '💰 Sales Logged', value: `\`${dbInfo.sales_count}\``, inline: true },
-            { name: '📈 Total Earnings', value: `**$${dbInfo.total_earnings.toFixed(2)}**`, inline: true }
+            { name: '🕒 Last Active', value: lastActiveText, inline: true },
+            { name: '📂 Tickets Opened', value: `\`${dbInfo.tickets_opened || 0}\``, inline: true },
+            { name: '✋ Tickets Claimed', value: `\`${dbInfo.tickets_claimed || 0}\``, inline: true },
+            { name: '🔒 Tickets Closed', value: `\`${dbInfo.tickets_closed || 0}\``, inline: true },
+            { name: '🎟️ Total Handled', value: `\`${dbInfo.tickets_handled || 0}\``, inline: true },
+            { name: '💰 Sales Logged', value: `\`${dbInfo.sales_count || 0}\``, inline: true },
+            { name: '📈 Total Earnings', value: `**$${Number(dbInfo.total_earnings || 0).toFixed(2)}**`, inline: true }
           )
-          .setFooter({ text: 'Pavo Tweak Staff Registry' })
+          .setFooter({ text: 'Pavo Tweak Staff Registry • Persistent DB' })
           .setTimestamp();
 
         await interaction.editReply({ embeds: [infoEmbed] });

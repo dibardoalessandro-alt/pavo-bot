@@ -12,5 +12,9 @@ services:
     envVars:
       - key: DISCORD_TOKEN
         sync: false  # Must be set manually in the Render dashboard
+      - key: DATABASE_URL
+        sync: false  # Recommended on Render Free Plan: PostgreSQL connection string (Render Postgres / Neon / Supabase)
+      - key: DATA_DIR
+        value: /var/data  # Used for SQLite if a Render Persistent Disk is mounted at /var/data (ignored if DATABASE_URL is set or falls back to ./data)
       - key: NODE_ENV
         value: production

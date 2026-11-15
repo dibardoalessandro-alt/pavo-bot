@@ -4,8 +4,14 @@
 # Dependencies
 node_modules/
 
-# Database file (contains user data - back up separately!)
+# Database files & backups (contains runtime user data - NEVER overwrite via Git!)
 pavo_database.json
+data/
+backups/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
 
 # OS generated files
 .DS_Store

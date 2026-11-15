@@ -101,6 +101,8 @@ if (earningsCmd.commands) {
   }
 }
 
+let backgroundTasksStarted = false;
+
 // Bot Ready event
 client.once('ready', async () => {
   console.log("=========================================");
@@ -109,9 +111,16 @@ client.once('ready', async () => {
 
   // Initialize Database
   try {
-    await db.initDatabase();
+    const storageInfo = await db.initDatabase();
+    const staffList = await db.getAllStaffStats();
+    const activeGiveaways = await db.getActiveGiveaways();
+    const legitData = await db.getLegitCheckData();
+    console.log(
+      `📊 [RECOVERY] Mode=${storageInfo.mode.toUpperCase()} | Staff=${staffList.length} | ` +
+      `ActiveGiveaways=${activeGiveaways.length} | LegitVotes=${Object.keys(legitData.votes || {}).length}`
+    );
   } catch (dbErr) {
-    console.error("CRITICAL: Failed to initialize SQLite database:", dbErr);
+    console.error("CRITICAL: Failed to initialize persistent database:", dbErr);
     process.exit(1);
   }
 
@@ -175,8 +184,10 @@ client.once('ready', async () => {
       await pavoBoosterCmd.sendOrUpdatePromoEmbed(client, config);
     }
 
-    // Periodic booster reconciliation every 5 minutes (checks if members left guild)
-    setInterval(async () => {
+    // Periodic booster reconciliation every 5 minutes (guarded against duplicate scheduling)
+    if (!backgroundTasksStarted) {
+      backgroundTasksStarted = true;
+      setInterval(async () => {
       try {
         const targetGuild = client.guilds.cache.get(config.guildId) || client.guilds.cache.first();
         if (!targetGuild) return;
@@ -203,6 +214,7 @@ client.once('ready', async () => {
         console.error('[BOOSTER SCAN ERROR]', scanErr.message);
       }
     }, 5 * 60 * 1000);
+    }
   } catch (boosterInitErr) {
     console.error('❌ Failed to initialize booster role/scheduler:', boosterInitErr);
   }
@@ -529,17 +541,19 @@ process.on('uncaughtException', error => {
 });
 
 // Graceful shutdown for cloud environments (Render sends SIGTERM on redeploy)
-process.on('SIGTERM', () => {
-  console.log('[SHUTDOWN] Received SIGTERM signal. Shutting down gracefully...');
+async function gracefulShutdown(signal) {
+  console.log(`[SHUTDOWN] Received ${signal} signal. Flushing database and shutting down gracefully...`);
+  try {
+    await db.flushDatabase();
+  } catch (e) {
+    console.error('[SHUTDOWN] Error flushing database:', e.message);
+  }
   client.destroy();
   process.exit(0);
-});
+}
 
-process.on('SIGINT', () => {
-  console.log('[SHUTDOWN] Received SIGINT signal. Shutting down gracefully...');
-  client.destroy();
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // ============================================
 // OAuth2 Verification & HTTP Health Check Server

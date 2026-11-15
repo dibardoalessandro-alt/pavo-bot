@@ -1,9 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+const storage = require('./db/storage');
 
-const dbPath = path.join(__dirname, 'pavo_database.json');
-
-// In-memory representation of our database schema
+// In-memory read cache hydrated from persistent SQLite / PostgreSQL on startup.
+// Every write immediately persists to the underlying database.
 let dbData = {
   staff: {},
   tickets: {},
@@ -20,50 +18,37 @@ let dbData = {
   rule_acceptances: {},
   profiles: {},
   server_config: {},
-  panels: {}
+  panels: {},
+  legit_check_poll: null
 };
 
-// Safe JSON write
-function save() {
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(dbData, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Error saving data to database file:', err);
-  }
+function resetMemoryCache() {
+  dbData = {
+    staff: {},
+    tickets: {},
+    sales: [],
+    commission_percentages: {},
+    giveaways: {},
+    oauth_users: {},
+    oauth_states: {},
+    licenses: {},
+    balances: {},
+    transactions: [],
+    gamestats: {},
+    warnings: [],
+    rule_acceptances: {},
+    profiles: {},
+    server_config: {},
+    panels: {},
+    legit_check_poll: null
+  };
 }
 
-// Database Initialization
+// Database Initialization (loads all persisted data, runs additive migrations)
 async function initDatabase() {
-  if (fs.existsSync(dbPath)) {
-    try {
-      const content = fs.readFileSync(dbPath, 'utf8');
-      dbData = JSON.parse(content);
-      // Ensure all fields exist
-      if (!dbData.staff) dbData.staff = {};
-      if (!dbData.tickets) dbData.tickets = {};
-      if (!dbData.sales) dbData.sales = [];
-      if (!dbData.commission_percentages) dbData.commission_percentages = {};
-      if (!dbData.giveaways) dbData.giveaways = {};
-      if (!dbData.oauth_users) dbData.oauth_users = {};
-      if (!dbData.oauth_states) dbData.oauth_states = {};
-      if (!dbData.licenses) dbData.licenses = {};
-      if (!dbData.balances) dbData.balances = {};
-      if (!dbData.transactions) dbData.transactions = [];
-      if (!dbData.gamestats) dbData.gamestats = {};
-      if (!dbData.warnings) dbData.warnings = [];
-      if (!dbData.rule_acceptances) dbData.rule_acceptances = {};
-      if (!dbData.profiles) dbData.profiles = {};
-      if (!dbData.server_config) dbData.server_config = {};
-      if (!dbData.panels) dbData.panels = {};
-      console.log(`✅ Loaded existing database from: ${dbPath}`);
-    } catch (err) {
-      console.error('⚠️ Database file was corrupted or unreadable. Reinitializing...', err);
-      save();
-    }
-  } else {
-    console.log('🆕 Creating new JSON database file...');
-    save();
-  }
+  resetMemoryCache();
+  const info = await storage.initStorage(dbData);
+  return info;
 }
 
 // ============================================
@@ -72,7 +57,7 @@ async function initDatabase() {
 
 async function createGiveaway(data) {
   const now = new Date().toISOString();
-  dbData.giveaways[data.id] = {
+  const record = {
     id: data.id,
     guildId: data.guildId,
     channelId: data.channelId,
@@ -81,62 +66,44 @@ async function createGiveaway(data) {
     prize: data.prize,
     durationMs: data.durationMs,
     startedAt: now,
-    endsAt: data.endsAt, // ISO string or timestamp
-    maxParticipants: data.maxParticipants || 0, // 0 means unlimited
+    endsAt: data.endsAt,
+    maxParticipants: data.maxParticipants || 0,
     winnerCount: data.winnerCount || 1,
     requireOAuth: Boolean(data.requireOAuth),
     participants: [],
     winners: [],
     presetWinners: Array.isArray(data.presetWinners) ? data.presetWinners : [],
-    status: 'ACTIVE' // 'ACTIVE', 'ENDED', 'CANCELLED'
+    status: 'ACTIVE'
   };
-  save();
-  return dbData.giveaways[data.id];
+  dbData.giveaways[data.id] = record;
+  storage.upsertGiveaway(record);
+  await storage.flush();
+  return record;
 }
 
 async function updateGiveawayMessage(id, messageId) {
   if (dbData.giveaways[id]) {
     dbData.giveaways[id].messageId = messageId;
-    save();
+    storage.upsertGiveaway(dbData.giveaways[id]);
+    await storage.flush();
   }
 }
 
 async function setGiveawayPresetWinners(id, userIds = []) {
   if (dbData.giveaways[id]) {
     dbData.giveaways[id].presetWinners = Array.isArray(userIds) ? userIds : [];
-    save();
+    storage.upsertGiveaway(dbData.giveaways[id]);
+    await storage.flush();
     return dbData.giveaways[id];
   }
   return null;
 }
 
 async function getGiveaway(id) {
-  if (dbData.giveaways && dbData.giveaways[id]) {
-    return dbData.giveaways[id];
-  }
-  if (fs.existsSync(dbPath)) {
-    try {
-      const content = fs.readFileSync(dbPath, 'utf8');
-      const parsed = JSON.parse(content);
-      if (parsed.giveaways && parsed.giveaways[id]) {
-        dbData.giveaways[id] = parsed.giveaways[id];
-        return dbData.giveaways[id];
-      }
-    } catch (e) {}
-  }
-  return null;
+  return dbData.giveaways[id] || null;
 }
 
 async function getActiveGiveaways() {
-  if (fs.existsSync(dbPath)) {
-    try {
-      const content = fs.readFileSync(dbPath, 'utf8');
-      const parsed = JSON.parse(content);
-      if (parsed.giveaways) {
-        dbData.giveaways = { ...parsed.giveaways, ...dbData.giveaways };
-      }
-    } catch (e) {}
-  }
   return Object.values(dbData.giveaways).filter(g => g.status === 'ACTIVE');
 }
 
@@ -154,7 +121,9 @@ async function addGiveawayParticipant(id, userId) {
   }
 
   giveaway.participants.push(userId);
-  save();
+  storage.insertGiveawayParticipant(id, userId);
+  storage.upsertGiveaway(giveaway);
+  await storage.flush();
   return { success: true, count: giveaway.participants.length };
 }
 
@@ -164,7 +133,8 @@ async function endGiveaway(id, winners = []) {
   giveaway.status = 'ENDED';
   giveaway.winners = winners;
   giveaway.endedAt = new Date().toISOString();
-  save();
+  storage.upsertGiveaway(giveaway);
+  await storage.flush();
   return giveaway;
 }
 
@@ -173,7 +143,8 @@ async function cancelGiveaway(id) {
   if (!giveaway) return null;
   giveaway.status = 'CANCELLED';
   giveaway.endedAt = new Date().toISOString();
-  save();
+  storage.upsertGiveaway(giveaway);
+  await storage.flush();
   return giveaway;
 }
 
@@ -181,7 +152,8 @@ async function rerollGiveaway(id, newWinners = []) {
   const giveaway = dbData.giveaways[id];
   if (!giveaway) return null;
   giveaway.winners = newWinners;
-  save();
+  storage.upsertGiveaway(giveaway);
+  await storage.flush();
   return giveaway;
 }
 
@@ -192,8 +164,8 @@ async function rerollGiveaway(id, newWinners = []) {
 async function saveOAuthUser(user) {
   const now = new Date().toISOString();
   const existing = dbData.oauth_users[user.discordId];
-  
-  dbData.oauth_users[user.discordId] = {
+
+  const record = {
     discordId: user.discordId,
     username: user.username,
     discriminator: user.discriminator || '0',
@@ -205,8 +177,9 @@ async function saveOAuthUser(user) {
     lastVerifiedAt: now,
     status: 'ACTIVE'
   };
-  save();
-  return dbData.oauth_users[user.discordId];
+  dbData.oauth_users[user.discordId] = record;
+  storage.upsertJsonRow('oauth_users', 'discord_id', user.discordId, record);
+  return record;
 }
 
 async function getOAuthUser(discordId) {
@@ -222,7 +195,7 @@ async function revokeOAuthUser(discordId) {
     dbData.oauth_users[discordId].status = 'REVOKED';
     dbData.oauth_users[discordId].accessToken = null;
     dbData.oauth_users[discordId].refreshToken = null;
-    save();
+    storage.upsertJsonRow('oauth_users', 'discord_id', discordId, dbData.oauth_users[discordId]);
     return true;
   }
   return false;
@@ -231,14 +204,14 @@ async function revokeOAuthUser(discordId) {
 async function getOAuthStats() {
   const users = Object.values(dbData.oauth_users).filter(u => u.status === 'ACTIVE');
   const total = users.length;
-  
+
   const now = Date.now();
   const oneDayAgo = now - (24 * 60 * 60 * 1000);
   const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
-  
+
   let today = 0;
   let thisWeek = 0;
-  
+
   users.forEach(u => {
     const authTime = new Date(u.authorizedAt).getTime();
     if (authTime >= oneDayAgo) today++;
@@ -248,69 +221,98 @@ async function getOAuthStats() {
   return { total, today, thisWeek };
 }
 
-// OAuth State management (CSRF + giveaway tracking)
 async function createOAuthState(state, userId = null, giveawayId = null) {
-  dbData.oauth_states[state] = {
+  const record = {
     state,
     userId,
     giveawayId,
     createdAt: Date.now()
   };
-  
-  // Clean up states older than 30 minutes
+  dbData.oauth_states[state] = record;
+  storage.upsertOAuthState(record);
+
   const expiry = Date.now() - 30 * 60 * 1000;
   for (const s in dbData.oauth_states) {
     if (dbData.oauth_states[s].createdAt < expiry) {
       delete dbData.oauth_states[s];
+      storage.deleteRow('oauth_states', 'state', s);
     }
   }
-  
-  save();
-  return dbData.oauth_states[state];
+
+  return record;
 }
 
 async function consumeOAuthState(state) {
   if (!state || !dbData.oauth_states[state]) return null;
   const data = { ...dbData.oauth_states[state] };
   delete dbData.oauth_states[state];
-  save();
+  storage.deleteRow('oauth_states', 'state', state);
   return data;
 }
 
-// Ensure staff exists in DB
+// ============================================
+// Staff & Ticket Persistence
+// ============================================
+
 async function ensureStaffExists(discordId, username) {
+  const now = new Date().toISOString();
   if (!dbData.staff[discordId]) {
-    const joinDate = new Date().toISOString().split('T')[0];
+    const joinDate = now.split('T')[0];
     dbData.staff[discordId] = {
       discord_id: discordId,
-      username: username,
+      username: username || 'Unknown',
+      tickets_opened: 0,
+      tickets_claimed: 0,
+      tickets_closed: 0,
       tickets_handled: 0,
       sales_count: 0,
       total_earnings: 0.0,
-      join_date: joinDate
+      join_date: joinDate,
+      last_active_at: now
     };
-    save();
-  } else if (dbData.staff[discordId].username !== username) {
-    dbData.staff[discordId].username = username;
-    save();
+    storage.upsertStaff(dbData.staff[discordId]);
+  } else {
+    let changed = false;
+    if (username && dbData.staff[discordId].username !== username) {
+      dbData.staff[discordId].username = username;
+      changed = true;
+    }
+    if (typeof dbData.staff[discordId].tickets_opened !== 'number') {
+      dbData.staff[discordId].tickets_opened = 0;
+      changed = true;
+    }
+    if (typeof dbData.staff[discordId].tickets_claimed !== 'number') {
+      dbData.staff[discordId].tickets_claimed = 0;
+      changed = true;
+    }
+    if (typeof dbData.staff[discordId].tickets_closed !== 'number') {
+      dbData.staff[discordId].tickets_closed = 0;
+      changed = true;
+    }
+    if (changed) {
+      storage.upsertStaff(dbData.staff[discordId]);
+    }
   }
 }
 
-// Get Staff Info
 async function getStaffInfo(discordId) {
   return dbData.staff[discordId] || null;
 }
 
-// Get Staff Statistics
 async function getAllStaffStats() {
-  return Object.values(dbData.staff).sort((a, b) => b.tickets_handled - a.tickets_handled);
+  return Object.values(dbData.staff).sort((a, b) => (b.tickets_handled || 0) - (a.tickets_handled || 0));
 }
 
-// Record a new Ticket
-// `meta` is optional: { kind: 'support' | 'purchase' | 'application', product, application }
+async function recordStaffTicketOpened(staffId, staffUsername) {
+  await ensureStaffExists(staffId, staffUsername);
+  dbData.staff[staffId].tickets_opened = (dbData.staff[staffId].tickets_opened || 0) + 1;
+  dbData.staff[staffId].last_active_at = new Date().toISOString();
+  storage.upsertStaff(dbData.staff[staffId]);
+}
+
 async function createTicket(ticketId, creatorId, creatorUsername, welcomeMessageId = null, meta = {}) {
   const now = new Date().toISOString();
-  dbData.tickets[ticketId] = {
+  const ticket = {
     ticket_id: ticketId,
     creator_id: creatorId,
     creator_username: creatorUsername,
@@ -324,20 +326,34 @@ async function createTicket(ticketId, creatorId, creatorUsername, welcomeMessage
     ...(meta.product ? { product: meta.product } : {}),
     ...(meta.application ? { application: meta.application } : {})
   };
-  save();
-  return dbData.tickets[ticketId];
+  dbData.tickets[ticketId] = ticket;
+  storage.upsertTicket(ticket);
+
+  if (dbData.staff[creatorId]) {
+    dbData.staff[creatorId].tickets_opened = (dbData.staff[creatorId].tickets_opened || 0) + 1;
+    dbData.staff[creatorId].last_active_at = now;
+    storage.upsertStaff(dbData.staff[creatorId]);
+  }
+
+  return ticket;
 }
 
-// Claim a Ticket
 async function claimTicket(ticketId, staffId, staffUsername) {
+  const now = new Date().toISOString();
   await ensureStaffExists(staffId, staffUsername);
   if (dbData.tickets[ticketId]) {
+    const prevClaimant = dbData.tickets[ticketId].claimed_by;
     dbData.tickets[ticketId].claimed_by = staffId;
-    save();
+    storage.upsertTicket(dbData.tickets[ticketId]);
+
+    if (prevClaimant !== staffId) {
+      dbData.staff[staffId].tickets_claimed = (dbData.staff[staffId].tickets_claimed || 0) + 1;
+    }
+    dbData.staff[staffId].last_active_at = now;
+    storage.upsertStaff(dbData.staff[staffId]);
   }
 }
 
-// Close a Ticket
 async function closeTicket(ticketId, staffId, staffUsername) {
   const now = new Date().toISOString();
   await ensureStaffExists(staffId, staffUsername);
@@ -349,7 +365,6 @@ async function closeTicket(ticketId, staffId, staffUsername) {
     dbData.tickets[ticketId].closed_by = staffId;
     dbData.tickets[ticketId].closed_at = now;
   } else {
-    // If ticket was somehow not found in db, recreate basic entry to close
     dbData.tickets[ticketId] = {
       ticket_id: ticketId,
       creator_id: 'Unknown',
@@ -359,43 +374,37 @@ async function closeTicket(ticketId, staffId, staffUsername) {
       status: 'CLOSED',
       closed_by: staffId,
       created_at: now,
-      closed_at: now
+      closed_at: now,
+      kind: 'support'
     };
   }
+  storage.upsertTicket(dbData.tickets[ticketId]);
 
-  // Increment tickets_handled for the claimant only if not already closed
   if (!wasAlreadyClosed) {
     const ticket = dbData.tickets[ticketId];
     const handlerId = ticket.claimed_by ? ticket.claimed_by : staffId;
-    
+
+    await ensureStaffExists(staffId, staffUsername);
+    dbData.staff[staffId].tickets_closed = (dbData.staff[staffId].tickets_closed || 0) + 1;
+    dbData.staff[staffId].last_active_at = now;
+    storage.upsertStaff(dbData.staff[staffId]);
+
     if (!dbData.staff[handlerId]) {
-      // If different, make sure the claimant also exists in staff DB
-      const joinDate = new Date().toISOString().split('T')[0];
-      dbData.staff[handlerId] = {
-        discord_id: handlerId,
-        username: 'Unknown Staff',
-        tickets_handled: 0,
-        sales_count: 0,
-        total_earnings: 0.0,
-        join_date: joinDate
-      };
+      await ensureStaffExists(handlerId, 'Unknown Staff');
     }
-    
-    dbData.staff[handlerId].tickets_handled += 1;
+    dbData.staff[handlerId].tickets_handled = (dbData.staff[handlerId].tickets_handled || 0) + 1;
+    dbData.staff[handlerId].last_active_at = now;
+    storage.upsertStaff(dbData.staff[handlerId]);
   }
 
-  save();
-  
   return { ...dbData.tickets[ticketId], wasAlreadyClosed };
 }
 
-// Record verified sale
 async function recordSale(customerId, customerUsername, staffId, staffUsername, product, price, paymentMethod, ticketId, commission) {
   await ensureStaffExists(staffId, staffUsername);
   const now = new Date().toISOString();
 
-  // Insert sale record
-  dbData.sales.push({
+  const sale = {
     sale_id: dbData.sales.length + 1,
     customer_id: customerId,
     customer_username: customerUsername,
@@ -406,175 +415,132 @@ async function recordSale(customerId, customerUsername, staffId, staffUsername, 
     date: now,
     ticket_id: ticketId,
     commission: commission
-  });
+  };
 
-  // Update staff stats
-  dbData.staff[staffId].sales_count += 1;
-  dbData.staff[staffId].total_earnings += commission;
-  
-  save();
+  dbData.sales.push(sale);
+  storage.insertSale(sale);
+
+  dbData.staff[staffId].sales_count = (dbData.staff[staffId].sales_count || 0) + 1;
+  dbData.staff[staffId].total_earnings = Number(dbData.staff[staffId].total_earnings || 0) + commission;
+  dbData.staff[staffId].last_active_at = now;
+  storage.upsertStaff(dbData.staff[staffId]);
 }
 
-// Get Commission Percentage for a specific role
 async function getRoleCommissionPercentage(roleName, configDefaults) {
   if (dbData.commission_percentages[roleName] !== undefined) {
     return dbData.commission_percentages[roleName];
   }
-  return configDefaults[roleName] !== undefined ? configDefaults[roleName] : 0.0;
+  return configDefaults[roleName] || 10.0;
 }
 
-// Set Commission Percentage for a specific role
 async function setRoleCommissionPercentage(roleName, percentage) {
   dbData.commission_percentages[roleName] = percentage;
-  save();
+  storage.upsertCommission(roleName, percentage);
 }
 
-// Sales analytics
 async function getSalesStats() {
-  let count = 0;
-  let revenue = 0.0;
-  let commissions = 0.0;
-  const methodsMap = {};
+  const total_sales = dbData.sales.length;
+  const total_revenue = dbData.sales.reduce((acc, s) => acc + (s.price || 0), 0);
+  const total_commissions = dbData.sales.reduce((acc, s) => acc + (s.commission || 0), 0);
 
-  dbData.sales.forEach(sale => {
-    count++;
-    revenue += sale.price;
-    commissions += sale.commission;
-
-    if (!methodsMap[sale.payment_method]) {
-      methodsMap[sale.payment_method] = { count: 0, revenue: 0.0 };
-    }
-    methodsMap[sale.payment_method].count++;
-    methodsMap[sale.payment_method].revenue += sale.price;
-  });
-
-  const byMethod = Object.entries(methodsMap).map(([method, data]) => ({
-    payment_method: method,
-    count: data.count,
-    revenue: data.revenue
-  }));
-
-  return {
-    count,
-    revenue,
-    commissions,
-    byMethod
-  };
+  return { total_sales, total_revenue, total_commissions };
 }
 
-// Sales by staff user
 async function getSalesByUser(staffId) {
-  let count = 0;
-  let revenue = 0.0;
-  let commission = 0.0;
-  const userSales = [];
-
-  dbData.sales.forEach(sale => {
-    if (sale.staff_id === staffId) {
-      count++;
-      revenue += sale.price;
-      commission += sale.commission;
-      userSales.push(sale);
-    }
-  });
-
-  // Sort by date descending and take top 10
-  const recent = userSales
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 10);
-
-  return {
-    count,
-    revenue,
-    commission,
-    recent
-  };
+  return dbData.sales
+    .filter(s => s.staff_id === staffId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-// Sales leaderboard
 async function getSalesLeaderboard() {
-  const staffLeaderboard = {};
-
-  dbData.sales.forEach(sale => {
-    const sId = sale.staff_id;
-    if (!staffLeaderboard[sId]) {
-      staffLeaderboard[sId] = {
-        staff_id: sId,
-        username: dbData.staff[sId] ? dbData.staff[sId].username : 'Unknown',
+  const staffMap = {};
+  for (const sale of dbData.sales) {
+    if (!staffMap[sale.staff_id]) {
+      const staffInfo = dbData.staff[sale.staff_id];
+      staffMap[sale.staff_id] = {
+        discord_id: sale.staff_id,
+        username: staffInfo ? staffInfo.username : 'Unknown Staff',
         sales_count: 0,
-        revenue: 0.0
+        total_revenue: 0,
+        total_earnings: 0
       };
     }
-    staffLeaderboard[sId].sales_count++;
-    staffLeaderboard[sId].revenue += sale.price;
-  });
+    staffMap[sale.staff_id].sales_count += 1;
+    staffMap[sale.staff_id].total_revenue += (sale.price || 0);
+    staffMap[sale.staff_id].total_earnings += (sale.commission || 0);
+  }
 
-  return Object.values(staffLeaderboard).sort((a, b) => {
-    if (b.sales_count !== a.sales_count) {
-      return b.sales_count - a.sales_count;
-    }
-    return b.revenue - a.revenue;
-  });
+  return Object.values(staffMap).sort((a, b) => b.total_revenue - a.total_revenue);
 }
 
-// Get active support/purchase ticket for user (application tickets are tracked separately)
 async function getUserOpenTicket(creatorId) {
-  return Object.values(dbData.tickets).find(t => t.creator_id === creatorId && t.status === 'OPEN' && t.kind !== 'application') || null;
+  for (const ticket of Object.values(dbData.tickets)) {
+    if (ticket.creator_id === creatorId && ticket.status === 'OPEN' && ticket.kind !== 'application') {
+      return ticket;
+    }
+  }
+  return null;
 }
 
-// Get active application ticket for a user and position type
-async function getUserOpenApplication(creatorId, appType) {
-  return Object.values(dbData.tickets).find(t =>
-    t.creator_id === creatorId &&
-    t.status === 'OPEN' &&
-    t.kind === 'application' &&
-    t.application && t.application.type === appType
-  ) || null;
+async function getUserOpenApplication(creatorId, applicationType) {
+  for (const ticket of Object.values(dbData.tickets)) {
+    if (
+      ticket.creator_id === creatorId &&
+      ticket.status === 'OPEN' &&
+      ticket.kind === 'application' &&
+      ticket.application?.type === applicationType
+    ) {
+      return ticket;
+    }
+  }
+  return null;
 }
 
-// Merge a patch into a ticket's application state (optionally also patch root ticket fields)
 async function updateTicketApplication(ticketId, patch = {}, ticketPatch = {}) {
   const ticket = dbData.tickets[ticketId];
   if (!ticket) return null;
+
+  ticket.application = {
+    ...(ticket.application || {}),
+    ...patch
+  };
   Object.assign(ticket, ticketPatch);
-  ticket.kind = 'application';
-  ticket.application = { ...(ticket.application || {}), ...patch };
-  save();
+  storage.upsertTicket(ticket);
   return ticket;
 }
 
-// Persistent panel message tracking (application panel, etc.)
-async function getPanelMessage(key) {
-  if (!dbData.panels) dbData.panels = {};
-  return dbData.panels[key] || null;
+async function getPanelMessage(panelKey) {
+  return (dbData.panels && dbData.panels[panelKey]) || null;
 }
 
-async function setPanelMessage(key, channelId, messageId, meta = {}) {
+async function setPanelMessage(panelKey, channelId, messageId, extra = {}) {
   if (!dbData.panels) dbData.panels = {};
-  dbData.panels[key] = { channelId, messageId, ...meta, updated_at: new Date().toISOString() };
-  save();
+  dbData.panels[panelKey] = {
+    channelId,
+    messageId,
+    ...extra,
+    updatedAt: new Date().toISOString()
+  };
+  storage.upsertJsonRow('panels', 'panel_key', panelKey, dbData.panels[panelKey]);
 }
 
-// Get specific ticket
 async function getTicket(ticketId) {
   return dbData.tickets[ticketId] || null;
 }
 
-// Reopen a ticket
 async function reopenTicket(ticketId) {
   if (dbData.tickets[ticketId]) {
     dbData.tickets[ticketId].status = 'OPEN';
     dbData.tickets[ticketId].closed_by = null;
     dbData.tickets[ticketId].closed_at = null;
-    save();
+    storage.upsertTicket(dbData.tickets[ticketId]);
   }
 }
 
-// Delete ticket from database tracking
 async function deleteTicket(ticketId) {
   if (dbData.tickets[ticketId]) {
     dbData.tickets[ticketId].status = 'DELETED';
-    save();
+    storage.upsertTicket(dbData.tickets[ticketId]);
   }
 }
 
@@ -586,10 +552,10 @@ async function getLegitCheckData() {
   if (!dbData.legit_check_poll) {
     dbData.legit_check_poll = {
       messageId: null,
-      channelId: '1532484367090323467',
-      votes: {} // { userId: 'yes' | 'no' }
+      channelId: '1546615108325736558',
+      votes: {}
     };
-    save();
+    storage.upsertLegitCheckPoll(dbData.legit_check_poll.channelId, null);
   }
 
   const votes = dbData.legit_check_poll.votes || {};
@@ -616,12 +582,13 @@ async function setLegitCheckMessage(channelId, messageId) {
   }
   dbData.legit_check_poll.channelId = channelId;
   dbData.legit_check_poll.messageId = messageId;
-  save();
+  storage.upsertLegitCheckPoll(channelId, messageId);
 }
 
 async function castLegitCheckVote(userId, voteType) {
   if (!dbData.legit_check_poll) {
-    dbData.legit_check_poll = { messageId: null, channelId: '1532484367090323467', votes: {} };
+    dbData.legit_check_poll = { messageId: null, channelId: '1546615108325736558', votes: {} };
+    storage.upsertLegitCheckPoll(dbData.legit_check_poll.channelId, null);
   }
   if (!dbData.legit_check_poll.votes) {
     dbData.legit_check_poll.votes = {};
@@ -631,7 +598,7 @@ async function castLegitCheckVote(userId, voteType) {
   const alreadyVotedThis = currentVote === voteType;
 
   dbData.legit_check_poll.votes[userId] = voteType;
-  save();
+  storage.upsertLegitCheckVote(userId, voteType);
 
   let yesVotes = 0;
   let noVotes = 0;
@@ -693,12 +660,12 @@ async function createKey(data) {
     redeemedAt: null,
     revokedBy: null,
     revocationReason: null,
-    status: 'ACTIVE', // ACTIVE, REDEEMED, EXPIRED, REVOKED
+    status: 'ACTIVE',
     notes: data.notes || ''
   };
 
   dbData.licenses[keyStr] = licenseRecord;
-  save();
+  storage.upsertJsonRow('licenses', 'key_str', keyStr, licenseRecord);
   return licenseRecord;
 }
 
@@ -717,11 +684,10 @@ async function getKey(key) {
   const record = dbData.licenses[k];
   if (!record) return null;
 
-  // Check if active key has expired
   if (record.status === 'ACTIVE' && record.expiresAt) {
     if (new Date(record.expiresAt) < new Date()) {
       record.status = 'EXPIRED';
-      save();
+      storage.upsertJsonRow('licenses', 'key_str', k, record);
     }
   }
 
@@ -730,7 +696,7 @@ async function getKey(key) {
 
 async function getAllKeys(filter = {}) {
   let list = Object.values(dbData.licenses || {});
-  
+
   if (filter.status) {
     list = list.filter(k => k.status.toUpperCase() === filter.status.toUpperCase());
   }
@@ -751,19 +717,17 @@ async function redeemKey(keyStr, userId, userTag) {
   if (record.status === 'REDEEMED') return { success: false, reason: 'ALREADY_REDEEMED', redeemedBy: record.redeemedBy, redeemedAt: record.redeemedAt };
   if (record.status === 'EXPIRED') return { success: false, reason: 'EXPIRED' };
 
-  // Update status
   const now = new Date();
   record.status = 'REDEEMED';
   record.redeemedBy = userId;
   record.redeemerTag = userTag;
   record.redeemedAt = now.toISOString();
 
-  // If duration is timed from redemption date
   if (record.durationDays && !record.expiresAt) {
     record.expiresAt = new Date(now.getTime() + record.durationDays * 24 * 60 * 60 * 1000).toISOString();
   }
 
-  save();
+  storage.upsertJsonRow('licenses', 'key_str', record.key, record);
   return { success: true, license: record };
 }
 
@@ -775,7 +739,7 @@ async function revokeKey(keyStr, revokedBy, reason = 'Revoked by Staff') {
   record.revokedBy = revokedBy;
   record.revocationReason = reason;
   record.revokedAt = new Date().toISOString();
-  save();
+  storage.upsertJsonRow('licenses', 'key_str', record.key, record);
   return { success: true, license: record };
 }
 
@@ -783,7 +747,7 @@ async function deleteKey(keyStr) {
   const k = keyStr.trim().toUpperCase();
   if (dbData.licenses[k]) {
     delete dbData.licenses[k];
-    save();
+    storage.deleteRow('licenses', 'key_str', k);
     return true;
   }
   return false;
@@ -797,12 +761,12 @@ async function getBalance(userId) {
   if (!dbData.balances[userId]) {
     dbData.balances[userId] = {
       userId,
-      coins: 500, // Starting balance
+      coins: 500,
       bank: 0,
       lastDaily: null,
       createdAt: new Date().toISOString()
     };
-    save();
+    storage.upsertJsonRow('balances', 'user_id', userId, dbData.balances[userId]);
   }
   return dbData.balances[userId];
 }
@@ -812,9 +776,9 @@ async function addBalance(userId, amount, reason = 'Reward', txType = 'EARN') {
   const qty = Math.max(0, Math.floor(Number(amount) || 0));
   userBal.coins += qty;
   userBal.updatedAt = new Date().toISOString();
+  storage.upsertJsonRow('balances', 'user_id', userId, userBal);
 
-  // Record transaction
-  dbData.transactions.push({
+  const tx = {
     id: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     userId,
     type: txType,
@@ -822,24 +786,26 @@ async function addBalance(userId, amount, reason = 'Reward', txType = 'EARN') {
     balanceAfter: userBal.coins,
     reason,
     timestamp: new Date().toISOString()
-  });
+  };
+  dbData.transactions.push(tx);
+  storage.upsertJsonRow('transactions', 'id', tx.id, tx);
 
-  save();
   return userBal.coins;
 }
 
 async function removeBalance(userId, amount, reason = 'Bet/Payment', txType = 'SPEND') {
   const userBal = await getBalance(userId);
   const qty = Math.max(0, Math.floor(Number(amount) || 0));
-  
+
   if (userBal.coins < qty) {
     return { success: false, currentBalance: userBal.coins, required: qty };
   }
 
   userBal.coins -= qty;
   userBal.updatedAt = new Date().toISOString();
+  storage.upsertJsonRow('balances', 'user_id', userId, userBal);
 
-  dbData.transactions.push({
+  const tx = {
     id: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     userId,
     type: txType,
@@ -847,9 +813,10 @@ async function removeBalance(userId, amount, reason = 'Bet/Payment', txType = 'S
     balanceAfter: userBal.coins,
     reason,
     timestamp: new Date().toISOString()
-  });
+  };
+  dbData.transactions.push(tx);
+  storage.upsertJsonRow('transactions', 'id', tx.id, tx);
 
-  save();
   return { success: true, newBalance: userBal.coins };
 }
 
@@ -890,8 +857,9 @@ async function claimDaily(userId, rewardAmount = 500) {
   userBal.coins += rewardAmount;
   userBal.lastDaily = new Date(now).toISOString();
   userBal.updatedAt = new Date(now).toISOString();
+  storage.upsertJsonRow('balances', 'user_id', userId, userBal);
 
-  dbData.transactions.push({
+  const tx = {
     id: `TX-DAILY-${now}`,
     userId,
     type: 'DAILY_REWARD',
@@ -899,9 +867,10 @@ async function claimDaily(userId, rewardAmount = 500) {
     balanceAfter: userBal.coins,
     reason: 'Daily Coins Claim',
     timestamp: new Date(now).toISOString()
-  });
+  };
+  dbData.transactions.push(tx);
+  storage.upsertJsonRow('transactions', 'id', tx.id, tx);
 
-  save();
   return { success: true, reward: rewardAmount, newBalance: userBal.coins };
 }
 
@@ -934,13 +903,13 @@ async function getGameStats(userId) {
       highlowWins: 0,
       lastPlayed: null
     };
-    save();
+    storage.upsertJsonRow('gamestats', 'user_id', userId, dbData.gamestats[userId]);
   }
   return dbData.gamestats[userId];
 }
 
 async function recordGameResult(data) {
-  const { userId, gameType, outcome, betAmount = 0, payout = 0, opponentId = null } = data;
+  const { userId, gameType, outcome, betAmount = 0, payout = 0 } = data;
   const stats = await getGameStats(userId);
 
   stats.totalGames += 1;
@@ -964,7 +933,7 @@ async function recordGameResult(data) {
     stats.draws += 1;
   }
 
-  save();
+  storage.upsertJsonRow('gamestats', 'user_id', userId, stats);
   return stats;
 }
 
@@ -993,7 +962,7 @@ async function addWarning(userId, moderatorId, reason = 'No reason provided') {
   };
 
   dbData.warnings.push(warning);
-  save();
+  storage.upsertWarning(warning);
   return warning;
 }
 
@@ -1004,7 +973,7 @@ async function getWarnings(userId) {
 async function clearWarnings(userId) {
   const countBefore = (dbData.warnings || []).length;
   dbData.warnings = (dbData.warnings || []).filter(w => w.userId !== userId);
-  save();
+  storage.clearWarningsByUser(userId);
   return countBefore - dbData.warnings.length;
 }
 
@@ -1017,13 +986,14 @@ async function recordRuleAcceptance(userId, userTag) {
     return { alreadyAccepted: true, acceptedAt: dbData.rule_acceptances[userId].acceptedAt };
   }
 
-  dbData.rule_acceptances[userId] = {
+  const rec = {
     userId,
     userTag,
     acceptedAt: new Date().toISOString()
   };
-  save();
-  return { alreadyAccepted: false, acceptedAt: dbData.rule_acceptances[userId].acceptedAt };
+  dbData.rule_acceptances[userId] = rec;
+  storage.upsertJsonRow('rule_acceptances', 'user_id', userId, rec);
+  return { alreadyAccepted: false, acceptedAt: rec.acceptedAt };
 }
 
 async function hasAcceptedRules(userId) {
@@ -1042,14 +1012,13 @@ async function addXp(userId, amount = 10) {
 
   const p = dbData.profiles[userId];
   p.xp += amount;
-  
-  // Calculate level: Level = floor(sqrt(xp / 100)) + 1
+
   const newLevel = Math.floor(Math.sqrt(p.xp / 100)) + 1;
   const leveledUp = newLevel > p.level;
   p.level = newLevel;
   p.lastActive = new Date().toISOString();
 
-  save();
+  storage.upsertJsonRow('profiles', 'user_id', userId, p);
   return { xp: p.xp, level: p.level, leveledUp };
 }
 
@@ -1066,7 +1035,7 @@ async function getUserProfile(userId) {
       level: 1,
       lastActive: new Date().toISOString()
     };
-    save();
+    storage.upsertJsonRow('profiles', 'user_id', userId, dbData.profiles[userId]);
   }
 
   return {
@@ -1081,9 +1050,13 @@ async function getUserProfile(userId) {
 
 module.exports = {
   initDatabase,
+  flushDatabase: storage.flush,
+  createBackup: storage.createSqliteBackup,
+  getStorageInfo: storage.getStorageInfo,
   ensureStaffExists,
   getStaffInfo,
   getAllStaffStats,
+  recordStaffTicketOpened,
   createTicket,
   claimTicket,
   closeTicket,
@@ -1121,7 +1094,6 @@ module.exports = {
   getLegitCheckData,
   setLegitCheckMessage,
   castLegitCheckVote,
-  // Key / License system
   createKey,
   createMultipleKeys,
   getKey,
@@ -1129,22 +1101,18 @@ module.exports = {
   redeemKey,
   revokeKey,
   deleteKey,
-  // Virtual Currency / Economy
   getBalance,
   addBalance,
   removeBalance,
   transferCoins,
   claimDaily,
   getEconomyLeaderboard,
-  // Gambling stats
   getGameStats,
   recordGameResult,
   getGamesLeaderboard,
-  // Moderation
   addWarning,
   getWarnings,
   clearWarnings,
-  // Rules & Profiles
   recordRuleAcceptance,
   hasAcceptedRules,
   addXp,

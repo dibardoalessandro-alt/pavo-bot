@@ -85,10 +85,27 @@ async function mergeCloudSnapshot(wrapper) {
       } else {
         // Prefer more advanced status (DELETED > CLOSED > OPEN)
         const rank = { OPEN: 1, CLOSED: 2, DELETED: 3 };
-        if ((rank[t.status] || 0) >= (rank[dbData.tickets[tid].status] || 0)) {
-          dbData.tickets[tid] = { ...dbData.tickets[tid], ...t };
-          storage.upsertTicket(dbData.tickets[tid]);
+        const cur = dbData.tickets[tid];
+        const vouchRequested = Boolean(cur.vouch_requested || t.vouch_requested);
+        const vouchRequestedBy = cur.vouch_requested_by || t.vouch_requested_by || null;
+        const vouchRequestedAt = cur.vouch_requested_at || t.vouch_requested_at || null;
+        if ((rank[t.status] || 0) >= (rank[cur.status] || 0)) {
+          dbData.tickets[tid] = {
+            ...cur,
+            ...t,
+            vouch_requested: vouchRequested,
+            vouch_requested_by: vouchRequestedBy,
+            vouch_requested_at: vouchRequestedAt
+          };
+        } else if (vouchRequested && !cur.vouch_requested) {
+          dbData.tickets[tid] = {
+            ...cur,
+            vouch_requested: true,
+            vouch_requested_by: vouchRequestedBy,
+            vouch_requested_at: vouchRequestedAt
+          };
         }
+        storage.upsertTicket(dbData.tickets[tid]);
       }
     }
 
@@ -725,6 +742,40 @@ async function deleteTicket(ticketId) {
   }
 }
 
+async function markTicketAwaitingVouch(ticketId, staffId, creatorId = null, creatorUsername = null) {
+  const now = new Date().toISOString();
+  if (!dbData.tickets[ticketId]) {
+    dbData.tickets[ticketId] = {
+      ticket_id: ticketId,
+      creator_id: creatorId || 'Unknown',
+      creator_username: creatorUsername || 'Unknown',
+      welcome_message_id: null,
+      claimed_by: staffId || null,
+      status: 'OPEN',
+      closed_by: null,
+      created_at: now,
+      closed_at: null,
+      kind: 'support',
+      vouch_requested: true,
+      vouch_requested_by: staffId,
+      vouch_requested_at: now
+    };
+  } else {
+    if (creatorId && (!dbData.tickets[ticketId].creator_id || dbData.tickets[ticketId].creator_id === 'Unknown')) {
+      dbData.tickets[ticketId].creator_id = creatorId;
+    }
+    if (creatorUsername && (!dbData.tickets[ticketId].creator_username || dbData.tickets[ticketId].creator_username === 'Unknown')) {
+      dbData.tickets[ticketId].creator_username = creatorUsername;
+    }
+    dbData.tickets[ticketId].vouch_requested = true;
+    dbData.tickets[ticketId].vouch_requested_by = staffId;
+    dbData.tickets[ticketId].vouch_requested_at = now;
+  }
+  storage.upsertTicket(dbData.tickets[ticketId]);
+  await storage.flush();
+  return dbData.tickets[ticketId];
+}
+
 // ============================================
 // Legit Check / Vouches Poll Persistence
 // ============================================
@@ -1256,6 +1307,7 @@ module.exports = {
   getTicket,
   reopenTicket,
   deleteTicket,
+  markTicketAwaitingVouch,
   createGiveaway,
   updateGiveawayMessage,
   setGiveawayPresetWinners,

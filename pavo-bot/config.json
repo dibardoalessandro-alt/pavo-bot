@@ -53,6 +53,15 @@
   "gameResultsChannelId": "1554856588169453568",
   "welcomeChannelId": "1554856579478593537",
   "memberRoleId": "1554853604584853596",
+  "vouchRoleId": "1532384602205851749",
+  "vouchChannelUrl": "https://discord.com/channels/1532173407158800464/1532484367090323467",
+  "ticketCategories": {
+    "orbsPcCategoryId": "1571585376815030272",
+    "pavoHubCategoryId": "1571585519270498429",
+    "supportCategoryId": "1571586158452932729",
+    "awaitingVouchCategoryId": "1571588433288106194",
+    "mmServiceCategoryId": "1571597907537297499"
+  },
   "purchaseTickets": {
     "panelChannelId": "1532385731513815170",
     "showSupportCategories": true,
@@ -64,6 +73,7 @@
         "description": "Purchase Orbs for PC",
         "productName": "Orbs PC",
         "channelSuffix": "orbs-pc",
+        "categoryId": "1571585376815030272",
         "footerText": "Orbs Premium Support"
       },
       {
@@ -72,7 +82,8 @@
         "emoji": "🤖",
         "description": "Custom bot development & hosting",
         "productName": "Custom Discord Bot",
-        "channelSuffix": "custom-bot"
+        "channelSuffix": "custom-bot",
+        "categoryId": "1571585376815030272"
       },
       {
         "value": "pavo_hub_script",
@@ -81,6 +92,7 @@
         "description": "Purchase access to the Pavo Hub script",
         "productName": "Pavo's Hub Script",
         "channelSuffix": "hub-script",
+        "categoryId": "1571585519270498429",
         "footerText": "Pavo Hub · Premium Support"
       }
     ]

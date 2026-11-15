@@ -52,7 +52,7 @@ async function hasActiveTicket(guild, userId) {
 }
 
 // Shared ticket creator logic
-// `options` (optional): { footerText, kind: 'support' | 'purchase' }
+// `options` (optional): { footerText, kind: 'support' | 'purchase', categoryId }
 async function createTicketChannel(interaction, config, productName, channelSuffix, fields, options = {}) {
   const guild = interaction.guild;
   const user = interaction.user;
@@ -97,8 +97,10 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     }
   }
 
+  const candidateCategories = [options.categoryId, config.ticketCategoryId].filter(Boolean);
+
   // Create Channel (automatically handles overflow categories if the 50-channel category limit is reached)
-  const channel = await createChannelWithOverflow(guild, [config.ticketCategoryId], {
+  const channel = await createChannelWithOverflow(guild, candidateCategories, {
     name: ticketName,
     type: ChannelType.GuildText,
     permissionOverwrites: permissionOverwrites,
@@ -203,16 +205,94 @@ function getPurchaseCategories(config) {
   });
 }
 
-// Existing support categories (kept as-is)
+// Support & service ticket categories
 const SUPPORT_TYPES = {
-  general_support: { title: 'General Support', suffix: 'general', label: 'General Support', emoji: '🛠️', description: 'General support and server questions' },
-  blockspin_support: { title: 'BlockSpin Support', suffix: 'blockspin', label: 'BlockSpin Support', emoji: '🎮', description: 'Dedicated support for BlockSpin & Visuals' },
-  trading_issue: { title: 'Trading Issue', suffix: 'trading', label: 'Trading Issue', emoji: '💰', description: 'Trading disputes and balance inquiries' },
   '1v1_issue': { title: '1v1 Match Issue', suffix: '1v1', label: '1v1 Issue', emoji: '⚔️', description: 'Match disputes and 1v1 issues' },
   key_license: { title: 'Key / License Support', suffix: 'license', label: 'Key / License', emoji: '🔑', description: 'License key activation, redemption and issues' },
   report_issue: { title: 'Member Report', suffix: 'report', label: 'Report', emoji: '🚨', description: 'Report a member or server incident' },
-  other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Other questions or assistance' }
+  other_support: { title: 'General / Other Support', suffix: 'support', label: 'Other', emoji: '💡', description: 'Other questions or assistance' },
+  general_support: { title: 'General Support', suffix: 'general', label: 'General Support', emoji: '🛠️', description: 'General support and server questions' },
+  mm_service: { title: 'MM Service', suffix: 'mm', label: 'MM Service', emoji: '🤝', description: 'Official Middleman (MM) service request' }
 };
+
+// Exact ticket menu order
+const TICKET_MENU_ORDER = [
+  '1v1_issue',
+  'key_license',
+  'report_issue',
+  'other_support',
+  'orbs_pc',
+  'custom_bot',
+  'pavo_hub_script',
+  'general_support',
+  'mm_service'
+];
+
+// Resolve the target Discord category ID for each ticket type
+function resolveTicketCategoryId(typeValue, config) {
+  const cats = config.ticketCategories || {};
+  switch (typeValue) {
+    case 'orbs_pc':
+    case 'custom_bot':
+      return cats.orbsPcCategoryId || '1571585376815030272';
+    case 'pavo_hub_script':
+    case 'key_license':
+      return cats.pavoHubCategoryId || '1571585519270498429';
+    case 'report_issue':
+    case 'general_support':
+      return cats.supportCategoryId || '1571586158452932729';
+    case 'mm_service':
+      return process.env.MM_SERVICE_CATEGORY_ID || cats.mmServiceCategoryId || '1571597907537297499';
+    case '1v1_issue':
+    case 'other_support':
+    default:
+      return config.ticketCategoryId;
+  }
+}
+
+// Build the ordered ticket menu options
+function buildTicketMenuOptions(config) {
+  const purchaseMap = new Map(getPurchaseCategories(config).map(c => [c.value, c]));
+  const options = [];
+  const added = new Set();
+
+  for (const key of TICKET_MENU_ORDER) {
+    if (purchaseMap.has(key)) {
+      const c = purchaseMap.get(key);
+      const opt = new StringSelectMenuOptionBuilder()
+        .setLabel(String(c.label).slice(0, 100))
+        .setValue(String(c.value).slice(0, 100));
+      if (c.description) opt.setDescription(String(c.description).slice(0, 100));
+      if (c.emoji) opt.setEmoji(c.emoji);
+      options.push(opt);
+      added.add(key);
+    } else if (config.purchaseTickets?.showSupportCategories !== false && SUPPORT_TYPES[key]) {
+      const t = SUPPORT_TYPES[key];
+      options.push(
+        new StringSelectMenuOptionBuilder()
+          .setLabel(t.label)
+          .setValue(key)
+          .setDescription(t.description)
+          .setEmoji(t.emoji)
+      );
+      added.add(key);
+    }
+  }
+
+  // Append any additional custom purchase categories configured in config.json
+  for (const [val, c] of purchaseMap.entries()) {
+    if (added.has(val)) continue;
+    const opt = new StringSelectMenuOptionBuilder()
+      .setLabel(String(c.label).slice(0, 100))
+      .setValue(String(c.value).slice(0, 100));
+    if (c.description) opt.setDescription(String(c.description).slice(0, 100));
+    if (c.emoji) opt.setEmoji(c.emoji);
+    options.push(opt);
+    added.add(val);
+  }
+
+  return options;
+}
 
 // Lazy-loaded to avoid a circular require between ticket.js and applications.js
 function getApplications() {
@@ -244,7 +324,167 @@ async function findWelcomeMessage(channel, ticketInfo) {
   return null;
 }
 
+// Helper to reliably identify a ticket channel and its original owner
+async function resolveTicketAndOwner(channel, ticketInfo) {
+  let ownerId = null;
+  let ownerUsername = ticketInfo?.creator_username || null;
+  let isTicket = Boolean(ticketInfo && ticketInfo.status !== 'DELETED');
+
+  if (ticketInfo?.creator_id && /^\d+$/.test(String(ticketInfo.creator_id))) {
+    ownerId = String(ticketInfo.creator_id);
+  }
+
+  // Fallback 1: inspect channel topic (e.g., "Support Ticket | Creator: user (123456789) | Product: ...")
+  if (!ownerId && channel?.topic) {
+    const topicMatch = channel.topic.match(/Creator:\s*([^\n(|]+?)\s*\((\d{15,22})\)/i) ||
+                       channel.topic.match(/\((\d{15,22})\)/);
+    if (topicMatch) {
+      if (topicMatch[2]) {
+        ownerUsername = ownerUsername || topicMatch[1]?.trim() || 'Customer';
+        ownerId = topicMatch[2];
+      } else if (topicMatch[1]) {
+        ownerId = topicMatch[1];
+      }
+      if (channel.topic.toLowerCase().includes('ticket') || channel.topic.toLowerCase().includes('application')) {
+        isTicket = true;
+      }
+    }
+  }
+
+  // Fallback 2: inspect the ticket welcome message
+  if (!ownerId || !isTicket) {
+    const welcomeMsg = await findWelcomeMessage(channel, ticketInfo);
+    if (welcomeMsg) {
+      isTicket = true;
+      if (!ownerId) {
+        const mentionMatch = (welcomeMsg.content || '').match(/<@!?(\d{15,22})>/);
+        if (mentionMatch) {
+          ownerId = mentionMatch[1];
+        } else if (welcomeMsg.embeds?.[0]) {
+          const emb = welcomeMsg.embeds[0];
+          const creatorField = (emb.fields || []).find(f => f.name && f.name.includes('Creator'));
+          const fieldMatch = creatorField?.value?.match(/<@!?(\d{15,22})>|\((\d{15,22})\)/);
+          const descMatch = (emb.description || '').match(/<@!?(\d{15,22})>/);
+          ownerId = fieldMatch?.[1] || fieldMatch?.[2] || descMatch?.[1] || null;
+        }
+      }
+    }
+  }
+
+  return { isTicket, ownerId, ownerUsername: ownerUsername || 'Customer' };
+}
+
+const vouchCommand = {
+  data: new SlashCommandBuilder()
+    .setName('vouch')
+    .setDescription('Move a completed customer ticket to Awaiting Vouch and request a vouch'),
+
+  async execute(interaction, config) {
+    const authorizedRoleId = config.vouchRoleId || '1532384602205851749';
+    const member = interaction.member;
+
+    if (!member || !member.roles || !member.roles.cache.has(authorizedRoleId)) {
+      return interaction.reply({
+        content: '❌ Permission denied. You are not authorized to use `/vouch`.',
+        ephemeral: true
+      });
+    }
+
+    const channel = interaction.channel;
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      return interaction.reply({
+        content: '❌ This command can only be used inside a valid ticket channel.',
+        ephemeral: true
+      });
+    }
+
+    const ticketInfo = await db.getTicket(channel.id);
+    const { isTicket, ownerId, ownerUsername } = await resolveTicketAndOwner(channel, ticketInfo);
+
+    if (!isTicket) {
+      return interaction.reply({
+        content: '❌ This channel is not a valid Pavo Bot ticket.',
+        ephemeral: true
+      });
+    }
+
+    if (!ownerId || !/^\d+$/.test(String(ownerId))) {
+      return interaction.reply({
+        content: '❌ Could not identify the original ticket owner. The ticket was not moved.',
+        ephemeral: true
+      });
+    }
+
+    const awaitingVouchCategoryId = config.ticketCategories?.awaitingVouchCategoryId || '1571588433288106194';
+    if (ticketInfo?.vouch_requested) {
+      return interaction.reply({
+        content: 'ℹ️ A vouch notification has already been sent for this ticket.',
+        ephemeral: true
+      });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      // Move ticket channel into the Awaiting Vouch category while preserving existing name & permissions
+      if (channel.parentId !== awaitingVouchCategoryId) {
+        await channel.setParent(awaitingVouchCategoryId, { lockPermissions: false });
+      }
+
+      // Persist vouch status in the database
+      await db.markTicketAwaitingVouch(channel.id, interaction.user.id, ownerId, ownerUsername);
+
+      const vouchUrl = config.vouchChannelUrl || 'https://discord.com/channels/1532173407158800464/1532484367090323467';
+
+      const vouchEmbed = new EmbedBuilder()
+        .setTitle('Thank You for Your Purchase!')
+        .setDescription(
+          `Hello <@${ownerId}>,\n\n` +
+          `Your purchase has been completed successfully!\n\n` +
+          `We would really appreciate it if you could leave us a vouch.\n\n` +
+          `Please leave your vouch in our designated vouch channel:\n\n` +
+          `${vouchUrl}\n\n` +
+          `Your feedback helps our community grow and supports our team.\n\n` +
+          `Thank you for choosing Pavo!`
+        )
+        .setColor(config.embedColor || '#4f46e5')
+        .setFooter({
+          text: 'Pavo Bot • Customer Support',
+          iconURL: interaction.guild?.iconURL() || null
+        })
+        .setTimestamp();
+
+      const linkRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('Leave a Vouch')
+          .setStyle(ButtonStyle.Link)
+          .setURL(vouchUrl)
+      );
+
+      await channel.send({
+        content: `<@${ownerId}>`,
+        embeds: [vouchEmbed],
+        components: [linkRow]
+      });
+
+      await interaction.editReply({
+        content: `✅ Ticket moved to **Awaiting Vouch** and <@${ownerId}> has been notified.`
+      });
+    } catch (err) {
+      console.error('Error executing /vouch:', err);
+      await interaction.editReply({
+        content: `❌ Failed to move ticket or send vouch notification: ${err.message}`
+      });
+    }
+  }
+};
+
 module.exports = {
+  vouchCommand,
+  resolveTicketCategoryId,
+  buildTicketMenuOptions,
+  SUPPORT_TYPES,
+  TICKET_MENU_ORDER,
   data: new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Ticket management commands')
@@ -360,6 +600,7 @@ module.exports = {
     if (purchaseCategory) {
       // Purchase categories (Orbs PC, Custom Discord Bot, Pavo's Hub Script, ...) → create ticket immediately
       const productName = purchaseCategory.productName || purchaseCategory.label;
+      const categoryId = purchaseCategory.categoryId || resolveTicketCategoryId(product, config);
       await interaction.reply({ content: `⏳ Creating your **${productName}** ticket...`, ephemeral: true });
       try {
         const ticketChannel = await createTicketChannel(
@@ -368,7 +609,7 @@ module.exports = {
           productName,
           purchaseCategory.channelSuffix || purchaseCategory.value,
           null,
-          { footerText: purchaseCategory.footerText, kind: 'purchase' }
+          { footerText: purchaseCategory.footerText, kind: 'purchase', categoryId }
         );
         await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
       } catch (err) {
@@ -377,10 +618,18 @@ module.exports = {
       }
     } else if (SUPPORT_TYPES[product] || product === 'other_support') {
       const selected = SUPPORT_TYPES[product] || { title: 'Support Ticket', suffix: 'ticket' };
+      const categoryId = resolveTicketCategoryId(product, config);
       await interaction.reply({ content: `⏳ Creating your **${selected.title}** ticket...`, ephemeral: true });
 
       try {
-        const ticketChannel = await createTicketChannel(interaction, config, selected.title, selected.suffix);
+        const ticketChannel = await createTicketChannel(
+          interaction,
+          config,
+          selected.title,
+          selected.suffix,
+          null,
+          { kind: 'support', categoryId }
+        );
         await interaction.editReply({ content: `✅ Ticket created successfully: <#${ticketChannel.id}>` });
       } catch (err) {
         console.error('Error creating ticket:', err);
@@ -414,27 +663,8 @@ module.exports = {
         });
       }
 
-      // Show dropdown menu: purchase categories first (from config), then the existing support categories
-      const options = getPurchaseCategories(config).map(c => {
-        const opt = new StringSelectMenuOptionBuilder()
-          .setLabel(String(c.label).slice(0, 100))
-          .setValue(String(c.value).slice(0, 100));
-        if (c.description) opt.setDescription(String(c.description).slice(0, 100));
-        if (c.emoji) opt.setEmoji(c.emoji);
-        return opt;
-      });
-
-      if (config.purchaseTickets?.showSupportCategories !== false) {
-        for (const [value, t] of Object.entries(SUPPORT_TYPES)) {
-          options.push(
-            new StringSelectMenuOptionBuilder()
-              .setLabel(t.label)
-              .setValue(value)
-              .setDescription(t.description)
-              .setEmoji(t.emoji)
-          );
-        }
-      }
+      // Show dropdown menu in the exact configured order
+      const options = buildTicketMenuOptions(config);
 
       if (options.length === 0) {
         return interaction.reply({ content: '❌ No ticket categories are configured right now.', ephemeral: true });

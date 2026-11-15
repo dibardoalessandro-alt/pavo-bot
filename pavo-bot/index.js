@@ -73,6 +73,7 @@ function registerCommand(cmd) {
 
 // Register all command modules
 registerCommand(ticketCmd);
+registerCommand(ticketCmd.vouchCommand);
 registerCommand(staffCmd);
 registerCommand(salesCmd);
 registerCommand(paymentCmd);

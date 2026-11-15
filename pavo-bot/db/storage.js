@@ -3,7 +3,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { Pool } = require('pg');
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
 
@@ -130,6 +130,9 @@ function initSqliteSchema() {
       kind TEXT NOT NULL DEFAULT 'support',
       product TEXT,
       application_json TEXT,
+      vouch_requested INTEGER NOT NULL DEFAULT 0,
+      vouch_requested_by TEXT,
+      vouch_requested_at TEXT,
       created_at TEXT NOT NULL,
       closed_at TEXT
     );
@@ -269,6 +272,14 @@ function initSqliteSchema() {
     sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)')
       .run(2, 'Add granular staff stats and preset giveaway winners', new Date().toISOString());
   }
+
+  if (applied < 3) {
+    ensureSqliteColumn('tickets', 'vouch_requested', 'INTEGER NOT NULL DEFAULT 0');
+    ensureSqliteColumn('tickets', 'vouch_requested_by', 'TEXT');
+    ensureSqliteColumn('tickets', 'vouch_requested_at', 'TEXT');
+    sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)')
+      .run(3, 'Add ticket vouch status columns', new Date().toISOString());
+  }
 }
 
 // ============================================
@@ -309,6 +320,9 @@ async function initPostgresSchema() {
         kind TEXT NOT NULL DEFAULT 'support',
         product TEXT,
         application_json TEXT,
+        vouch_requested INTEGER NOT NULL DEFAULT 0,
+        vouch_requested_by TEXT,
+        vouch_requested_at TEXT,
         created_at TEXT NOT NULL,
         closed_at TEXT
       );
@@ -435,6 +449,9 @@ async function initPostgresSchema() {
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS tickets_closed INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS last_active_at TEXT;
       ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS preset_winners_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS vouch_requested INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS vouch_requested_by TEXT;
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS vouch_requested_at TEXT;
     `);
 
     await client.query(
@@ -551,14 +568,17 @@ function upsertTicket(t) {
     kind: t.kind || 'support',
     product: t.product || null,
     application_json: t.application ? JSON.stringify(t.application) : null,
+    vouch_requested: t.vouch_requested ? 1 : 0,
+    vouch_requested_by: t.vouch_requested_by || null,
+    vouch_requested_at: t.vouch_requested_at || null,
     created_at: t.created_at || new Date().toISOString(),
     closed_at: t.closed_at || null
   };
 
   if (mode === 'sqlite') {
     sqlite.prepare(`
-      INSERT INTO tickets (ticket_id, creator_id, creator_username, welcome_message_id, claimed_by, closed_by, status, kind, product, application_json, created_at, closed_at)
-      VALUES (@ticket_id, @creator_id, @creator_username, @welcome_message_id, @claimed_by, @closed_by, @status, @kind, @product, @application_json, @created_at, @closed_at)
+      INSERT INTO tickets (ticket_id, creator_id, creator_username, welcome_message_id, claimed_by, closed_by, status, kind, product, application_json, vouch_requested, vouch_requested_by, vouch_requested_at, created_at, closed_at)
+      VALUES (@ticket_id, @creator_id, @creator_username, @welcome_message_id, @claimed_by, @closed_by, @status, @kind, @product, @application_json, @vouch_requested, @vouch_requested_by, @vouch_requested_at, @created_at, @closed_at)
       ON CONFLICT(ticket_id) DO UPDATE SET
         creator_id = excluded.creator_id,
         creator_username = excluded.creator_username,
@@ -569,13 +589,16 @@ function upsertTicket(t) {
         kind = excluded.kind,
         product = excluded.product,
         application_json = excluded.application_json,
+        vouch_requested = excluded.vouch_requested,
+        vouch_requested_by = excluded.vouch_requested_by,
+        vouch_requested_at = excluded.vouch_requested_at,
         created_at = excluded.created_at,
         closed_at = excluded.closed_at
     `).run(row);
   } else {
     enqueuePg(() => pgPool.query(
-      `INSERT INTO tickets (ticket_id, creator_id, creator_username, welcome_message_id, claimed_by, closed_by, status, kind, product, application_json, created_at, closed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO tickets (ticket_id, creator_id, creator_username, welcome_message_id, claimed_by, closed_by, status, kind, product, application_json, vouch_requested, vouch_requested_by, vouch_requested_at, created_at, closed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        ON CONFLICT(ticket_id) DO UPDATE SET
          creator_id = EXCLUDED.creator_id,
          creator_username = EXCLUDED.creator_username,
@@ -586,12 +609,16 @@ function upsertTicket(t) {
          kind = EXCLUDED.kind,
          product = EXCLUDED.product,
          application_json = EXCLUDED.application_json,
+         vouch_requested = EXCLUDED.vouch_requested,
+         vouch_requested_by = EXCLUDED.vouch_requested_by,
+         vouch_requested_at = EXCLUDED.vouch_requested_at,
          created_at = EXCLUDED.created_at,
          closed_at = EXCLUDED.closed_at`,
       [
         row.ticket_id, row.creator_id, row.creator_username, row.welcome_message_id,
         row.claimed_by, row.closed_by, row.status, row.kind, row.product,
-        row.application_json, row.created_at, row.closed_at
+        row.application_json, row.vouch_requested, row.vouch_requested_by,
+        row.vouch_requested_at, row.created_at, row.closed_at
       ]
     ));
   }
@@ -895,6 +922,9 @@ async function loadAllInto(dbData) {
       created_at: r.created_at,
       closed_at: r.closed_at || null,
       kind: r.kind || 'support',
+      vouch_requested: Boolean(r.vouch_requested),
+      vouch_requested_by: r.vouch_requested_by || null,
+      vouch_requested_at: r.vouch_requested_at || null,
       ...(r.product ? { product: r.product } : {}),
       ...(r.application_json ? { application: safeParseJson(r.application_json, null) } : {})
     };

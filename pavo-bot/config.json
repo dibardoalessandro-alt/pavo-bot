@@ -54,6 +54,7 @@
   "welcomeChannelId": "1554856579478593537",
   "memberRoleId": "1554853604584853596",
   "vouchRoleId": "1532384602205851749",
+  "vouchOnlyRoleIds": ["1538244553637634118"],
   "vouchChannelUrl": "https://discord.com/channels/1532173407158800464/1532484367090323467",
   "ticketCategories": {
     "orbsPcCategoryId": "1571585376815030272",

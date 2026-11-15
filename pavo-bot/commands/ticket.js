@@ -82,7 +82,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
   ];
 
   // Add permissions for configured staff roles
-  for (const [roleName, roleId] of Object.entries(config.staffRoles)) {
+  for (const [roleName, roleId] of Object.entries(config.allStaffRoles || config.staffRoles)) {
     if (roleId && roleId.match(/^\d+$/)) {
       permissionOverwrites.push({
         id: roleId,

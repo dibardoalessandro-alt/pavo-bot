@@ -328,7 +328,35 @@ client.on('guildMemberAdd', async member => {
 });
 
 // Interaction Event Listener
+// Members whose only staff role is a "vouch-only" role (config.vouchOnlyRoleIds) are treated as
+// non-staff everywhere, so they can run /vouch but no other staff command or button.
+const baseConfig = config;
+function getEffectiveConfig(cfg, member) {
+  const vouchOnly = Array.isArray(cfg.vouchOnlyRoleIds) ? cfg.vouchOnlyRoleIds : [];
+  if (!member || !member.roles || !member.roles.cache || vouchOnly.length === 0) return cfg;
+  if (!vouchOnly.some(id => member.roles.cache.has(id))) return cfg;
+
+  const allStaff = cfg.staffRoles || {};
+  const hasOtherStaff = Object.values(allStaff).some(id => !vouchOnly.includes(id) && member.roles.cache.has(id));
+  if (hasOtherStaff) return cfg;
+
+  const staffRoles = {};
+  for (const [name, id] of Object.entries(allStaff)) {
+    if (!vouchOnly.includes(id)) staffRoles[name] = id;
+  }
+  const removed = new Set(Object.keys(allStaff).filter(n => !(n in staffRoles)));
+  return {
+    ...cfg,
+    allStaffRoles: allStaff,
+    staffRoles,
+    staffHierarchy: (cfg.staffHierarchy || []).filter(n => !removed.has(n)),
+    managementRoles: (cfg.managementRoles || []).filter(n => !removed.has(n))
+  };
+}
+
 client.on('interactionCreate', async interaction => {
+  const config = getEffectiveConfig(baseConfig, interaction.member);
+
   // 1. Chat input (slash commands)
   if (interaction.isChatInputCommand()) {
     const command = commandsMap.get(interaction.commandName);

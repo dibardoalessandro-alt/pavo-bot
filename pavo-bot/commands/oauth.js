@@ -62,10 +62,15 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     // ==========================================
-    // 1. OAUTH STATS
+    // 1. OAUTH STATS (WITH AUTHORIZED USER NAMES)
     // ==========================================
     if (subcommand === 'stats') {
       const stats = await db.getOAuthStats();
+      const allUsers = await db.getAllOAuthUsers();
+      const userLines = allUsers.slice(0, 40).map((u, idx) =>
+        `\`${idx + 1}.\` <@${u.discordId}> (**${u.username || 'Unknown'}**)`
+      ).join('\n');
+      const moreNote = allUsers.length > 40 ? `\n*...e altri ${allUsers.length - 40} utenti*` : '';
 
       const embed = new EmbedBuilder()
         .setTitle('🔐 Pavo OAuth Statistics')
@@ -74,6 +79,7 @@ module.exports = {
           `> 👥 **Authorized Users:** \`${stats.total}\`\n` +
           `> 📅 **Verified Today:** \`${stats.today}\`\n` +
           `> 📊 **Verified This Week:** \`${stats.thisWeek}\`\n\n` +
+          (userLines ? `**👥 Lista Utenti Verificati:**\n${userLines}${moreNote}\n\n` : '') +
           `*Official Discord OAuth2 Verification System*`
         )
         .addFields(

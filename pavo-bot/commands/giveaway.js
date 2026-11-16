@@ -81,6 +81,44 @@ function selectWinners(participants, count) {
   return pool.slice(0, Math.min(count, pool.length));
 }
 
+// Resolve participant IDs into readable names + mentions
+async function formatParticipantList(interaction, participantIds = [], maxDisplay = 50) {
+  if (!Array.isArray(participantIds) || participantIds.length === 0) return '';
+  const slice = participantIds.slice(0, maxDisplay);
+  const lines = [];
+
+  for (let i = 0; i < slice.length; i++) {
+    const uid = slice[i];
+    let username = null;
+
+    // 1. Check OAuth DB record
+    const oauthUser = await db.getOAuthUser(uid);
+    if (oauthUser?.username) username = oauthUser.username;
+
+    // 2. Check guild cache / client user cache
+    if (!username && interaction.guild) {
+      const cachedMember = interaction.guild.members.cache.get(uid);
+      if (cachedMember?.user?.username) username = cachedMember.user.username;
+    }
+    if (!username && interaction.client) {
+      const cachedUser = interaction.client.users.cache.get(uid);
+      if (cachedUser?.username) username = cachedUser.username;
+      else {
+        const fetched = await interaction.client.users.fetch(uid).catch(() => null);
+        if (fetched?.username) username = fetched.username;
+      }
+    }
+
+    lines.push(`\`${i + 1}.\` <@${uid}> ${username ? `(**${username}**)` : `(\`${uid}\`)`}`);
+  }
+
+  if (participantIds.length > maxDisplay) {
+    lines.push(`*...e altri ${participantIds.length - maxDisplay} partecipanti*`);
+  }
+
+  return lines.join('\n');
+}
+
 // Generate Giveaway Embed
 function buildGiveawayEmbed(giveaway, config) {
   const endTimestamp = Math.floor(new Date(giveaway.endsAt).getTime() / 1000);
@@ -303,7 +341,35 @@ module.exports = {
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')
-        .setDescription('List all currently active giveaways')
+        .setDescription('List active giveaways and see the names of all participants')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('users')
+        .setDescription('Show the full list and names of all participants in a giveaway')
+        .addStringOption(option =>
+          option
+            .setName('giveaway_id')
+            .setDescription('ID of the giveaway (defaults to the latest active giveaway)')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('winner')
+        .setDescription('Set or change the winner of an active giveaway (private, only you see it)')
+        .addUserOption(option =>
+          option
+            .setName('user')
+            .setDescription('User to set as winner (leave empty to open the private selector menu)')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('giveaway_id')
+            .setDescription('ID of the giveaway (defaults to the latest active giveaway)')
+            .setRequired(false)
+        )
     ),
 
   async execute(interaction, config) {
@@ -521,7 +587,7 @@ module.exports = {
     }
 
     // ==========================================
-    // 5. LIST GIVEAWAYS
+    // 5. LIST GIVEAWAYS (WITH PARTICIPANT NAMES)
     // ==========================================
     if (subcommand === 'list') {
       const active = await db.getActiveGiveaways();
@@ -532,21 +598,124 @@ module.exports = {
         });
       }
 
+      await interaction.deferReply({ ephemeral: true });
+
+      const blocks = [];
+      for (const g of active) {
+        const endTs = Math.floor(new Date(g.endsAt).getTime() / 1000);
+        const participantLines = await formatParticipantList(interaction, g.participants || [], 30);
+        const presetText = Array.isArray(g.presetWinners) && g.presetWinners.length > 0
+          ? g.presetWinners.map(id => `<@${id}>`).join(', ')
+          : '🎲 Casuale';
+
+        blocks.push(
+          `• **#${g.id}** — **${g.prize}**\n` +
+          `  Canale: <#${g.channelId}> | Vincitori: **${g.winnerCount}** | Scade: <t:${endTs}:R>\n` +
+          `  👑 Vincitore impostato: ${presetText}\n` +
+          `  👥 **Partecipanti (${(g.participants || []).length}):**\n` +
+          (participantLines || '  *(Nessun partecipante)*')
+        );
+      }
+
       const embed = new EmbedBuilder()
-        .setTitle('🎉 Active Pavo Giveaways')
+        .setTitle('🎉 Active Pavo Giveaways & Partecipanti')
         .setColor(config.embedColor || '#4f46e5')
-        .setDescription(
-          active.map(g => {
-            const endTs = Math.floor(new Date(g.endsAt).getTime() / 1000);
-            return `• **#${g.id}** — **${g.prize}**\n` +
-                   `  Channel: <#${g.channelId}> | Winners: **${g.winnerCount}** | Participants: **${g.participants.length}**\n` +
-                   `  Ends: <t:${endTs}:R> | Verified Only: **${g.requireOAuth ? 'Yes 🔐' : 'No 🔓'}**`;
-          }).join('\n\n')
-        )
+        .setDescription(blocks.join('\n\n').slice(0, 4000))
         .setFooter({ text: `${config.embedFooterText || 'Pavo Tweak'} • Total Active: ${active.length}` })
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ==========================================
+    // 6. GIVEAWAY USERS (FULL PARTICIPANT NAMES)
+    // ==========================================
+    if (subcommand === 'users') {
+      const targetId = interaction.options.getString('giveaway_id');
+      let giveaway = null;
+
+      if (targetId) {
+        giveaway = await db.getGiveaway(targetId);
+      } else {
+        const active = await db.getActiveGiveaways();
+        giveaway = active.find(g => g.channelId === interaction.channelId) || active[0];
+        if (!giveaway) {
+          const all = await db.getAllGiveaways();
+          giveaway = all[all.length - 1] || null;
+        }
+      }
+
+      if (!giveaway) {
+        return interaction.reply({
+          content: '❌ Nessun giveaway trovato.',
+          ephemeral: true
+        });
+      }
+
+      await interaction.deferReply({ ephemeral: true });
+
+      const participants = giveaway.participants || [];
+      const formattedList = await formatParticipantList(interaction, participants, 100);
+      const presetText = Array.isArray(giveaway.presetWinners) && giveaway.presetWinners.length > 0
+        ? giveaway.presetWinners.map(id => `<@${id}>`).join(', ')
+        : '🎲 Casuale';
+
+      const embed = new EmbedBuilder()
+        .setTitle(`👥 Partecipanti Giveaway #${giveaway.id} — ${giveaway.prize}`)
+        .setColor(config.embedColor || '#4f46e5')
+        .setDescription(
+          `**Stato:** \`${giveaway.status}\` | **Totale iscritti:** **${participants.length}**\n` +
+          `**Vincitore impostato:** ${presetText}\n\n` +
+          (formattedList ? `**Lista Partecipanti:**\n${formattedList}` : '*Nessun partecipante iscritto al momento.*')
+        )
+        .setFooter({ text: `Usa /giveaway winner per scegliere o cambiare il vincitore in privato` })
+        .setTimestamp();
+
+      // Also attach the private winner selector directly below if the giveaway is still ACTIVE
+      const components = giveaway.status === 'ACTIVE'
+        ? buildGiveawayCreatorSetupPayload(giveaway).components
+        : [];
+
+      return interaction.editReply({ embeds: [embed], components });
+    }
+
+    // ==========================================
+    // 7. SET / CHANGE WINNER ON RUNNING GIVEAWAY
+    // ==========================================
+    if (subcommand === 'winner') {
+      const targetId = interaction.options.getString('giveaway_id');
+      const targetUser = interaction.options.getUser('user');
+      let giveaway = null;
+
+      if (targetId) {
+        giveaway = await db.getGiveaway(targetId);
+      } else {
+        const active = await db.getActiveGiveaways();
+        giveaway = active.find(g => g.channelId === interaction.channelId) || active[0];
+      }
+
+      if (!giveaway || giveaway.status !== 'ACTIVE') {
+        return interaction.reply({
+          content: '❌ Nessun giveaway attivo trovato.',
+          ephemeral: true
+        });
+      }
+
+      if (targetUser) {
+        const updated = await db.setGiveawayPresetWinners(giveaway.id, [targetUser.id]);
+        return interaction.reply({
+          ...buildGiveawayCreatorSetupPayload(
+            updated || giveaway,
+            `✅ **Vincitore impostato su:** <@${targetUser.id}> (\`${targetUser.username}\`)\n*(Solo tu vedi questo messaggio; il vincitore è salvato anche se il giveaway è già iniziato)*`
+          ),
+          ephemeral: true
+        });
+      }
+
+      return interaction.reply({
+        ...buildGiveawayCreatorSetupPayload(giveaway),
+        ephemeral: true
+      });
     }
   },
 

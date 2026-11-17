@@ -87,10 +87,16 @@ class OAuthServer {
         }
         this._liveRooms = this._liveRooms || new Map();
         const TTL_MS = 15 * 60 * 1000;
+        const ALLOWED_WEAPONS = new Set([
+          'ak47', 'aug', 'crossbow', 'm16', 'mp5', 'p90',
+          'pumpkin launcher', 'rpg', 'remington',
+          'tactical axe', 'tactical knife', 'tactical shovel',
+          'awp', 'anaconda', 'm249'
+        ]);
         const prune = (rm) => {
           const cutoff = Date.now() - TTL_MS;
           for (const [k, v] of rm.entries()) {
-            if (v.lastSeen < cutoff) rm.delete(k);
+            if (v.lastSeen < cutoff || !ALLOWED_WEAPONS.has(String(v.name || '').toLowerCase())) rm.delete(k);
           }
         };
         if (req.method === 'GET') {
@@ -101,7 +107,9 @@ class OAuthServer {
             return res.end(JSON.stringify({ success: true, items: [] }));
           }
           prune(rm);
-          const list = [...rm.values()].sort((a, b) => (a.rarity !== b.rarity ? (a.rarity === 'omega' ? -1 : 1) : b.lastSeen - a.lastSeen));
+          const list = [...rm.values()]
+            .filter(v => v && ALLOWED_WEAPONS.has(String(v.name || '').toLowerCase()))
+            .sort((a, b) => (a.rarity !== b.rarity ? (a.rarity === 'omega' ? -1 : 1) : b.lastSeen - a.lastSeen));
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ success: true, items: list }));
         }
@@ -130,7 +138,7 @@ class OAuthServer {
                 const name = String(it.name || '').trim().slice(0, 80);
                 const owner = String(it.owner || 'Unknown').trim().slice(0, 64);
                 const status = String(it.status || 'Equipped').trim().slice(0, 40);
-                if ((rarity !== 'legendary' && rarity !== 'omega') || !name) continue;
+                if ((rarity !== 'legendary' && rarity !== 'omega') || !ALLOWED_WEAPONS.has(name.toLowerCase())) continue;
                 rm.set(`${jobId}|${owner}|${name}`, { name, rarity, owner, status, jobId, players, lastSeen: now });
                 added++;
               }

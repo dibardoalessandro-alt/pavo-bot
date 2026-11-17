@@ -5,6 +5,7 @@ const config = require('./config');
 const licenseRoutes = require('./routes/licenseRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const boosterRoutes = require('./routes/boosterRoutes');
+const liveItemsRoutes = require('./routes/liveItemsRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/license', licenseRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/booster', boosterRoutes);
+app.use('/api/live-items', liveItemsRoutes);
 
 // 404 Not Found Handler
 app.use((req, res) => {

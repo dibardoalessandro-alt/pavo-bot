@@ -76,6 +76,79 @@ class OAuthServer {
         return res.end('Pavo Bot is alive');
       }
 
+      // 1.5 Global Live Items Sync API (Legendary & Omega)
+      if (pathname === '/api/live-items') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          return res.end();
+        }
+        this._liveRooms = this._liveRooms || new Map();
+        const TTL_MS = 15 * 60 * 1000;
+        const prune = (rm) => {
+          const cutoff = Date.now() - TTL_MS;
+          for (const [k, v] of rm.entries()) {
+            if (v.lastSeen < cutoff) rm.delete(k);
+          }
+        };
+        if (req.method === 'GET') {
+          const room = String(query.room || 'pavo_global').slice(0, 64);
+          const rm = this._liveRooms.get(room);
+          if (!rm) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, items: [] }));
+          }
+          prune(rm);
+          const list = [...rm.values()].sort((a, b) => (a.rarity !== b.rarity ? (a.rarity === 'omega' ? -1 : 1) : b.lastSeen - a.lastSeen));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, items: list }));
+        }
+        if (req.method === 'POST') {
+          let raw = '';
+          req.on('data', chunk => { if (raw.length < 1048576) raw += chunk; });
+          req.on('end', () => {
+            try {
+              const body = JSON.parse(raw || '{}');
+              const room = String(body.room || 'pavo_global').slice(0, 64);
+              const jobId = String(body.jobId || '').trim();
+              const players = Number(body.players) || 0;
+              const items = Array.isArray(body.items) ? body.items : [];
+              if (!jobId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, error: 'Missing jobId' }));
+              }
+              let rm = this._liveRooms.get(room);
+              if (!rm) { rm = new Map(); this._liveRooms.set(room, rm); }
+              prune(rm);
+              const now = Date.now();
+              let added = 0;
+              for (const it of items.slice(0, 50)) {
+                if (!it || typeof it !== 'object') continue;
+                const rarity = String(it.rarity || '').toLowerCase();
+                const name = String(it.name || '').trim().slice(0, 80);
+                const owner = String(it.owner || 'Unknown').trim().slice(0, 64);
+                const status = String(it.status || 'Equipped').trim().slice(0, 40);
+                if ((rarity !== 'legendary' && rarity !== 'omega') || !name) continue;
+                rm.set(`${jobId}|${owner}|${name}`, { name, rarity, owner, status, jobId, players, lastSeen: now });
+                added++;
+              }
+              if (rm.size > 300) {
+                const sorted = [...rm.entries()].sort((a, b) => a[1].lastSeen - b[1].lastSeen);
+                for (let i = 0; i < rm.size - 300; i++) rm.delete(sorted[i][0]);
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ success: true, recorded: added, total: rm.size }));
+            } catch (e) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }));
+            }
+          });
+          return;
+        }
+      }
+
       // 2. Landing / Verification Hub
       if (pathname === '/' || pathname === '/oauth' || pathname === '/oauth/login') {
         return this.renderLandingPage(req, res, query);

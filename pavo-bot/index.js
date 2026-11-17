@@ -643,5 +643,5 @@ console.log(`[STARTUP] Environment: ${process.env.NODE_ENV || 'development'}`);
 client.login(botToken).catch(err => {
   console.error("CRITICAL: Failed to login to Discord client:", err.message);
   console.error("Please ensure the DISCORD_TOKEN environment variable contains a valid Bot Token!");
-  process.exit(1);
+  console.warn("[OAUTH & HEALTH] Keeping HTTP web server online without Discord client.");
 });

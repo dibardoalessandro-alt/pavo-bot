@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const ALLOWED_RARITIES = new Set(['legendary', 'omega']);
-const ITEM_TTL_MS = 3 * 60 * 1000; // Keep sightings for 3 minutes (avoids stale closed servers)
+const ITEM_TTL_MS = 6 * 60 * 1000; // Keep sightings for 6 minutes
 const MAX_ITEMS_PER_ROOM = 300;
 
 // In-memory store: Map<room, Map<key, item>>

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const ALLOWED_RARITIES = new Set(['legendary', 'omega']);
-const ITEM_TTL_MS = 15 * 60 * 1000; // Keep sightings for 15 minutes
+const ITEM_TTL_MS = 3 * 60 * 1000; // Keep sightings for 3 minutes (avoids stale closed servers)
 const MAX_ITEMS_PER_ROOM = 300;
 
 // In-memory store: Map<room, Map<key, item>>
@@ -42,6 +42,7 @@ router.post('/', (req, res) => {
     const name = String(it.name || '').trim().slice(0, 80);
     const owner = String(it.owner || 'Unknown').trim().slice(0, 64);
     const status = String(it.status || 'Equipped').trim().slice(0, 40);
+    const placeId = Number(it.placeId) || undefined;
 
     if (!ALLOWED_RARITIES.has(rarity) || !name) continue;
 
@@ -52,6 +53,7 @@ router.post('/', (req, res) => {
       owner,
       status,
       jobId: cleanJobId,
+      ...(placeId ? { placeId } : {}),
       players: Number(players) || 0,
       lastSeen: now,
     });
@@ -87,6 +89,24 @@ router.get('/', (req, res) => {
   });
 
   res.json({ success: true, items: list });
+});
+
+router.post('/dead', (req, res) => {
+  const { room = 'pavo_global', jobId } = req.body || {};
+  const cleanRoom = String(room || 'pavo_global').slice(0, 64);
+  const cleanJobId = String(jobId || '').trim();
+  const roomMap = rooms.get(cleanRoom);
+  if (!roomMap || !cleanJobId) {
+    return res.json({ success: true, removed: 0 });
+  }
+  let removed = 0;
+  for (const [k, v] of roomMap.entries()) {
+    if (v.jobId === cleanJobId) {
+      roomMap.delete(k);
+      removed++;
+    }
+  }
+  res.json({ success: true, removed });
 });
 
 module.exports = router;

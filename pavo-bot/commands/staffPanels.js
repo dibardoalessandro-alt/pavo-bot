@@ -34,18 +34,18 @@ function isAnyStaff(member, config) {
 
 // Product options for Confirm Purchase
 const PRODUCT_OPTIONS = [
-  { value: 'pavo_hub_key', label: "Pavo's Hub Key", emoji: '🔑', description: "Key di Pavo's Hub (richiede durata in giorni)" },
-  { value: 'orbs_pc', label: 'Orbs PC', emoji: '🖥️', description: 'Orbs per PC' },
-  { value: 'custom_bot', label: 'Custom Discord Bot', emoji: '🤖', description: 'Bot Discord personalizzato' },
-  { value: 'mm_service', label: 'MM Service', emoji: '🤝', description: 'Servizio Middleman' },
-  { value: 'other', label: 'Altro Prodotto', emoji: '📦', description: 'Specifica il prodotto nel modulo' }
+  { value: 'pavo_hub_key', label: "Pavo's Hub Key", emoji: '🔑', description: "Pavo's Hub license key (asks duration in days)" },
+  { value: 'orbs_pc', label: 'Orbs PC', emoji: '🖥️', description: 'Orbs for PC' },
+  { value: 'custom_bot', label: 'Custom Discord Bot', emoji: '🤖', description: 'Custom Discord bot development & hosting' },
+  { value: 'mm_service', label: 'MM Service', emoji: '🤝', description: 'Official Middleman service' },
+  { value: 'other', label: 'Other Product', emoji: '📦', description: 'Specify the product in the next step' }
 ];
 
 const PAYMENT_OPTIONS = [
-  { value: 'money', label: 'Soldi (€ / $)', emoji: '💵', description: 'Pagamento in denaro (PayPal, LTC, ecc.)' },
-  { value: 'rpg', label: 'RPG', emoji: '🚀', description: 'Pagamento in RPG (specifica quanti)' },
-  { value: 'anaconda', label: 'Anaconda', emoji: '🐍', description: 'Pagamento in Anaconda (specifica quanti)' },
-  { value: 'other_pay', label: 'Altro Metodo', emoji: '💳', description: 'Altro metodo / item (specifica quantità)' }
+  { value: 'money', label: 'Money ($ / €)', emoji: '💵', description: 'Cash / money payment (PayPal, LTC, etc.)' },
+  { value: 'rpg', label: 'RPG', emoji: '🚀', description: 'Paid in RPG (specify how many)' },
+  { value: 'anaconda', label: 'Anaconda', emoji: '🐍', description: 'Paid in Anaconda (specify how many)' },
+  { value: 'other_pay', label: 'Other Method', emoji: '💳', description: 'Another payment method or item' }
 ];
 
 // ==========================================
@@ -62,12 +62,12 @@ async function sendOrUpdateStaffInfoPanel(client, config) {
   const embed = new EmbedBuilder()
     .setTitle('📊 Pavo Staff — Check Info')
     .setDescription(
-      `Benvenuto nel pannello statistiche dello Staff!\n\n` +
-      `Clicca sul bottone **Check Info** qui sotto per vedere le tue statistiche complete in privato:\n` +
-      `• 💬 **Messaggi inviati** sul server\n` +
-      `• ✋ **Ticket claimati** e 🔒 **Ticket chiusi**\n` +
-      `• 🎟️ **Totale ticket gestiti**\n` +
-      `• 💰 **Vendite confermate** (Soldi, RPG, Anaconda e storico recente)`
+      `Welcome to the Staff Statistics Panel!\n\n` +
+      `Click the **Check Info** button below to privately view your full staff statistics:\n` +
+      `• 💬 **Messages Sent** across the server\n` +
+      `• ✋ **Tickets Claimed** & 🔒 **Tickets Closed**\n` +
+      `• 🎟️ **Total Tickets Handled**\n` +
+      `• 💰 **Confirmed Sales** (Money, RPG, Anaconda & recent history)`
     )
     .setColor(config.embedColor || '#4f46e5')
     .setThumbnail(channel.guild?.iconURL({ dynamic: true }) || null)
@@ -116,12 +116,12 @@ async function sendOrUpdateConfirmPurchasePanel(client, config) {
   const embed = new EmbedBuilder()
     .setTitle('💰 Pavo Staff — Confirm Purchase')
     .setDescription(
-      `Usa questo pannello per registrare ogni vendita completata.\n\n` +
-      `Clicca su **Confirm Purchase** qui sotto e scegli:\n` +
-      `1️⃣ **Cosa hai venduto** *(se è una Key di Pavo's Hub ti verrà chiesto da quanti giorni)*\n` +
-      `2️⃣ **Come ha pagato il cliente** *(Soldi, RPG, Anaconda o altro)*\n` +
-      `3️⃣ **Quantità / Importo** e nome/ID del cliente\n\n` +
-      `Ogni vendita viene salvata in modo permanente nel database e conteggiata automaticamente nel tuo **Check Info**.`
+      `Use this panel to log every completed customer purchase.\n\n` +
+      `Click **Confirm Purchase** below and select:\n` +
+      `1️⃣ **What you sold** *(for Pavo's Hub Key you will enter how many days)*\n` +
+      `2️⃣ **How the customer paid** *(Money, RPG, Anaconda, or Other)*\n` +
+      `3️⃣ **Amount / Quantity** and customer name or ID\n\n` +
+      `Every confirmed sale is permanently saved to the database and automatically added to your **Check Info** profile.`
     )
     .setColor('#22c55e')
     .setThumbnail(channel.guild?.iconURL({ dynamic: true }) || null)
@@ -165,7 +165,7 @@ async function handleButton(interaction, config) {
 
   if (!isAnyStaff(member, config)) {
     return interaction.reply({
-      content: '❌ Solo i membri dello Staff possono usare questo pannello.',
+      content: '❌ Only staff members can use this panel.',
       ephemeral: true
     });
   }
@@ -179,17 +179,12 @@ async function handleButton(interaction, config) {
 
     await db.ensureStaffExists(user.id, user.username);
     const dbInfo = await db.getStaffInfo(user.id);
-    const salesData = await db.getSalesByUser(user.id);
+    const allSales = await getAllUserSales(user.id);
 
     // Summarize payment totals across Money, RPG, Anaconda
     let totalMoney = 0;
     let totalRpg = 0;
     let totalAnaconda = 0;
-    for (const s of (salesData.recent || [])) {
-      // also compute full stats across all sales of this user below
-    }
-    // Use getSalesByUser full list via recent? Let's compute across all sales from db
-    const allSales = await getAllUserSales(user.id);
     for (const s of allSales) {
       const pm = String(s.payment_method || '');
       const upper = pm.toUpperCase();
@@ -218,23 +213,23 @@ async function handleButton(interaction, config) {
       .setColor(config.embedColor || '#4f46e5')
       .setThumbnail(user.displayAvatarURL({ dynamic: true }))
       .addFields(
-        { name: '🛡️ Ruolo Staff', value: `**${roleName}**`, inline: true },
-        { name: '📅 Staff dal', value: dbInfo?.join_date || 'N/A', inline: true },
-        { name: '🕒 Ultima Attività', value: lastActiveText, inline: true },
-        { name: '💬 Messaggi Inviati', value: `\`${dbInfo?.messages_sent || 0}\``, inline: true },
-        { name: '✋ Ticket Claimati', value: `\`${dbInfo?.tickets_claimed || 0}\``, inline: true },
-        { name: '🔒 Ticket Chiusi', value: `\`${dbInfo?.tickets_closed || 0}\``, inline: true },
-        { name: '🎟️ Ticket Gestiti', value: `\`${dbInfo?.tickets_handled || 0}\``, inline: true },
-        { name: '💰 Vendite Totali', value: `\`${Math.max(dbInfo?.sales_count || 0, allSales.length)}\``, inline: true },
-        { name: '💵 Totale Soldi', value: `**$${totalMoney.toFixed(2)}**`, inline: true },
-        { name: '🚀 Totale RPG', value: `\`${totalRpg}\``, inline: true },
-        { name: '🐍 Totale Anaconda', value: `\`${totalAnaconda}\``, inline: true }
+        { name: '🛡️ Staff Role', value: `**${roleName}**`, inline: true },
+        { name: '📅 Joined Staff', value: dbInfo?.join_date || 'N/A', inline: true },
+        { name: '🕒 Last Active', value: lastActiveText, inline: true },
+        { name: '💬 Messages Sent', value: `\`${dbInfo?.messages_sent || 0}\``, inline: true },
+        { name: '✋ Tickets Claimed', value: `\`${dbInfo?.tickets_claimed || 0}\``, inline: true },
+        { name: '🔒 Tickets Closed', value: `\`${dbInfo?.tickets_closed || 0}\``, inline: true },
+        { name: '🎟️ Tickets Handled', value: `\`${dbInfo?.tickets_handled || 0}\``, inline: true },
+        { name: '💰 Total Sales', value: `\`${Math.max(dbInfo?.sales_count || 0, allSales.length)}\``, inline: true },
+        { name: '💵 Total Money', value: `**$${totalMoney.toFixed(2)}**`, inline: true },
+        { name: '🚀 Total RPG', value: `\`${totalRpg}\``, inline: true },
+        { name: '🐍 Total Anaconda', value: `\`${totalAnaconda}\``, inline: true }
       )
       .setFooter({ text: 'Pavo Staff Registry • Persistent DB' })
       .setTimestamp();
 
     if (recentLines) {
-      infoEmbed.addFields({ name: '🧾 Ultime 5 Vendite', value: recentLines, inline: false });
+      infoEmbed.addFields({ name: '🧾 Recent Sales (Last 5)', value: recentLines, inline: false });
     }
 
     return interaction.editReply({ embeds: [infoEmbed] });
@@ -244,7 +239,7 @@ async function handleButton(interaction, config) {
   if (customId === 'staffpanel_confirm_purchase') {
     const productSelect = new StringSelectMenuBuilder()
       .setCustomId('staffpanel_select_product')
-      .setPlaceholder('1️⃣ Seleziona cosa hai venduto...')
+      .setPlaceholder('1️⃣ Select what you sold...')
       .addOptions(
         PRODUCT_OPTIONS.map(p =>
           new StringSelectMenuOptionBuilder()
@@ -256,7 +251,7 @@ async function handleButton(interaction, config) {
       );
 
     return interaction.reply({
-      content: '🛒 **Confirm Purchase (Step 1/3)**\nSeleziona il prodotto che hai venduto:',
+      content: '🛒 **Confirm Purchase (Step 1/3)**\nSelect the product you sold:',
       components: [new ActionRowBuilder().addComponents(productSelect)],
       ephemeral: true
     });
@@ -269,7 +264,7 @@ async function handleButton(interaction, config) {
 async function handleSelectMenu(interaction, config) {
   const customId = interaction.customId;
   if (!isAnyStaff(interaction.member, config)) {
-    return interaction.reply({ content: '❌ Solo lo Staff può registrare vendite.', ephemeral: true });
+    return interaction.reply({ content: '❌ Only staff members can log sales.', ephemeral: true });
   }
 
   // Step 1 -> Step 2: Product chosen, now choose payment method
@@ -279,7 +274,7 @@ async function handleSelectMenu(interaction, config) {
 
     const paymentSelect = new StringSelectMenuBuilder()
       .setCustomId(`staffpanel_select_payment:${productKey}`)
-      .setPlaceholder('2️⃣ Seleziona come ha pagato il cliente...')
+      .setPlaceholder('2️⃣ Select how the customer paid...')
       .addOptions(
         PAYMENT_OPTIONS.map(pm =>
           new StringSelectMenuOptionBuilder()
@@ -291,7 +286,7 @@ async function handleSelectMenu(interaction, config) {
       );
 
     return interaction.update({
-      content: `🛒 **Confirm Purchase (Step 2/3)**\nProdotto scelto: **${prodObj?.label || productKey}**\nOra seleziona **come ha pagato** il cliente:`,
+      content: `🛒 **Confirm Purchase (Step 2/3)**\nSelected product: **${prodObj?.label || productKey}**\nNow select **how the customer paid**:`,
       components: [new ActionRowBuilder().addComponents(paymentSelect)]
     });
   }
@@ -300,11 +295,10 @@ async function handleSelectMenu(interaction, config) {
   if (customId.startsWith('staffpanel_select_payment:')) {
     const productKey = customId.split(':')[1];
     const paymentKey = interaction.values[0];
-    const prodObj = PRODUCT_OPTIONS.find(p => p.value === productKey);
 
     const modal = new ModalBuilder()
       .setCustomId(`staffpanel_purchase_modal:${productKey}:${paymentKey}`)
-      .setTitle('Confirm Purchase — Dettagli');
+      .setTitle('Confirm Purchase — Details');
 
     const rows = [];
 
@@ -314,9 +308,9 @@ async function handleSelectMenu(interaction, config) {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('custom_product')
-            .setLabel('Cosa hai venduto?')
+            .setLabel('What did you sell?')
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: Pavo Tweak, Boost, ecc.')
+            .setPlaceholder('e.g. Pavo Tweak, Boosts, etc.')
             .setRequired(true)
         )
       );
@@ -328,29 +322,29 @@ async function handleSelectMenu(interaction, config) {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('key_days')
-            .setLabel('Da quanti giorni è la Key di Pavo Hub?')
+            .setLabel("How many days is the Pavo's Hub Key?")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: 7 giorni, 30 giorni, Lifetime')
+            .setPlaceholder('e.g. 7 days, 30 days, Lifetime')
             .setRequired(true)
         )
       );
     }
 
     // Payment amount / quantity field tailored to chosen method
-    let amountLabel = 'Importo / Quantità';
-    let amountPlaceholder = 'Es: 10';
+    let amountLabel = 'Amount / Quantity';
+    let amountPlaceholder = 'e.g. 10';
     if (paymentKey === 'money') {
-      amountLabel = 'Quanti soldi ha pagato? (es. 15.00)';
-      amountPlaceholder = 'Es: 15.00';
+      amountLabel = 'How much money did they pay? (e.g. 15.00)';
+      amountPlaceholder = 'e.g. 15.00';
     } else if (paymentKey === 'rpg') {
-      amountLabel = 'Quanti RPG ha dato?';
-      amountPlaceholder = 'Es: 3';
+      amountLabel = 'How many RPGs did they pay?';
+      amountPlaceholder = 'e.g. 3';
     } else if (paymentKey === 'anaconda') {
-      amountLabel = 'Quante Anaconda ha dato?';
-      amountPlaceholder = 'Es: 2';
+      amountLabel = 'How many Anacondas did they pay?';
+      amountPlaceholder = 'e.g. 2';
     } else {
-      amountLabel = 'Metodo e quantità (es. 5 Boosts)';
-      amountPlaceholder = 'Es: 5 Boosts / 100k cash';
+      amountLabel = 'Payment method & quantity';
+      amountPlaceholder = 'e.g. 5 Boosts';
     }
 
     rows.push(
@@ -369,9 +363,9 @@ async function handleSelectMenu(interaction, config) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('customer_info')
-          .setLabel('Cliente (Nome o ID Discord - opzionale)')
+          .setLabel('Customer (Username or Discord ID - optional)')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Es: @utente o 123456789012345678')
+          .setPlaceholder('e.g. username or 123456789012345678')
           .setRequired(false)
       )
     );
@@ -389,7 +383,7 @@ async function handleModal(interaction, config) {
   if (!customId.startsWith('staffpanel_purchase_modal:')) return;
 
   if (!isAnyStaff(interaction.member, config)) {
-    return interaction.reply({ content: '❌ Solo lo Staff può registrare vendite.', ephemeral: true });
+    return interaction.reply({ content: '❌ Only staff members can log sales.', ephemeral: true });
   }
 
   await interaction.deferReply({ ephemeral: true });
@@ -404,7 +398,7 @@ async function handleModal(interaction, config) {
     }
     if (productKey === 'pavo_hub_key') {
       const rawDays = interaction.fields.getTextInputValue('key_days').trim();
-      const daysLabel = /^\d+$/.test(rawDays) ? `${rawDays} giorni` : rawDays;
+      const daysLabel = /^\d+$/.test(rawDays) ? `${rawDays} days` : rawDays;
       productName = `Pavo's Hub Key (${daysLabel})`;
     }
 
@@ -417,19 +411,19 @@ async function handleModal(interaction, config) {
 
     if (paymentKey === 'money') {
       if (!numericMatch || isNaN(numericVal) || numericVal < 0) {
-        return interaction.editReply({ content: '❌ Inserisci un importo valido in soldi (es. `15` o `15.50`).' });
+        return interaction.editReply({ content: '❌ Please enter a valid money amount (e.g. `15` or `15.50`).' });
       }
       recordedPrice = numericVal;
-      paymentDisplay = `Soldi ($${numericVal.toFixed(2)})`;
+      paymentDisplay = `Money ($${numericVal.toFixed(2)})`;
     } else if (paymentKey === 'rpg') {
       if (!numericMatch || isNaN(numericVal) || numericVal <= 0) {
-        return interaction.editReply({ content: '❌ Inserisci un numero valido di **RPG** (es. `2`).' });
+        return interaction.editReply({ content: '❌ Please enter a valid number of **RPGs** (e.g. `2`).' });
       }
       recordedPrice = 0;
       paymentDisplay = `RPG x${numericVal}`;
     } else if (paymentKey === 'anaconda') {
       if (!numericMatch || isNaN(numericVal) || numericVal <= 0) {
-        return interaction.editReply({ content: '❌ Inserisci un numero valido di **Anaconda** (es. `2`).' });
+        return interaction.editReply({ content: '❌ Please enter a valid number of **Anacondas** (e.g. `2`).' });
       }
       recordedPrice = 0;
       paymentDisplay = `Anaconda x${numericVal}`;
@@ -473,15 +467,15 @@ async function handleModal(interaction, config) {
       .setColor('#22c55e')
       .addFields(
         { name: '🛡️ Staff', value: `<@${interaction.user.id}> (${interaction.user.username})`, inline: true },
-        { name: '📦 Prodotto', value: `**${productName}**`, inline: true },
-        { name: '💳 Pagamento', value: `**${paymentDisplay}**`, inline: true },
-        { name: '👤 Cliente', value: customerId !== 'Unknown' ? `<@${customerId}> (${customerUsername})` : customerUsername, inline: true },
+        { name: '📦 Product', value: `**${productName}**`, inline: true },
+        { name: '💳 Payment', value: `**${paymentDisplay}**`, inline: true },
+        { name: '👤 Customer', value: customerId !== 'Unknown' ? `<@${customerId}> (${customerUsername})` : customerUsername, inline: true },
         { name: '🆔 Sale ID', value: `\`#${sale.sale_id}\``, inline: true }
       )
       .setFooter({ text: 'Pavo Sales Registry • Persistent DB' })
       .setTimestamp();
 
-    // Post public receipt in the Confirm Purchase channel (or log channel)
+    // Post public receipt in the Confirm Purchase channel (and staff log channel if different)
     const confirmChannelId = config.confirmPurchasePanelChannelId || '1575292386085441556';
     const confirmChannel = interaction.guild?.channels.cache.get(confirmChannelId) ||
       await interaction.client.channels.fetch(confirmChannelId).catch(() => null);
@@ -499,12 +493,12 @@ async function handleModal(interaction, config) {
     }
 
     return interaction.editReply({
-      content: `✅ Vendita **#${sale.sale_id}** registrata con successo! (**${productName}** — **${paymentDisplay}**)`,
+      content: `✅ Sale **#${sale.sale_id}** logged successfully! (**${productName}** — **${paymentDisplay}**)`,
       embeds: [confirmEmbed]
     });
   } catch (err) {
     console.error('❌ [STAFF PANELS] Error recording purchase:', err);
-    return interaction.editReply({ content: `❌ Errore nel salvataggio della vendita: ${err.message}` });
+    return interaction.editReply({ content: `❌ Failed to save purchase: ${err.message}` });
   }
 }
 

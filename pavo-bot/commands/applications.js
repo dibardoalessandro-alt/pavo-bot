@@ -449,7 +449,7 @@ async function openApplicationTicket(interaction, config, type) {
       ...reviewerRoleIds.map(id => ({ id, allow: memberPerms }))
     ];
 
-    const targetCategoryId = config.applications?.categoryId || '1532385488554430575';
+    const targetCategoryId = config.applications?.categoryId || '1571585726078783680';
     channel = await createChannelWithOverflow(guild, [targetCategoryId, config.ticketCategoryId], {
       name: sanitizeChannelName(`${position.channelPrefix}-${user.username}`),
       type: ChannelType.GuildText,

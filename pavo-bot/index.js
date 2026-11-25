@@ -146,6 +146,14 @@ client.once('ready', async () => {
           console.error(`❌ Failed to register commands for guild ${gid}:`, guildErr.message);
         }
       }
+
+      // Remove old GLOBAL copies of the commands, so every command shows up only once (guild copies remain)
+      try {
+        await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+        console.log('🧹 Removed duplicate global slash commands (only one copy of each command remains).');
+      } catch (globalErr) {
+        console.error('❌ Failed to clear global slash commands:', globalErr.message);
+      }
     } else {
       console.log('🔄 Guild ID not configured. Refreshing commands globally (may take up to an hour)...');
       await rest.put(

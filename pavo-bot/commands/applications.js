@@ -261,7 +261,8 @@ async function buildApplicationPanelPayload(config, guild) {
   const bannerPath = path.join(__dirname, '..', 'assets', 'apply-banner.gif');
   const hasBanner = fs.existsSync(bannerPath);
 
-  const container = new ContainerBuilder().setAccentColor(brandColor(config));
+  const accentHex = parseInt(String(brandColor(config)).replace('#', ''), 16);
+  const container = new ContainerBuilder().setAccentColor(Number.isFinite(accentHex) ? accentHex : 0x4f46e5);
 
   if (hasBanner) {
     container.addMediaGalleryComponents(

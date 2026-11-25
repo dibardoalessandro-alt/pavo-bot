@@ -30,6 +30,7 @@ const {
   MessageFlags
 } = require('discord.js');
 const db = require('../database');
+const { btnEmoji } = require('../utils/buttonEmoji');
 const { positions, PARAGRAPH } = require('../applications.config');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
 const dmNotifier = require('../utils/dmNotifier');
@@ -149,7 +150,7 @@ function buildControlsRow(ticketInfo) {
       new ButtonBuilder()
         .setCustomId('app_start')
         .setLabel(label)
-        .setEmoji('📝')
+        .setEmoji(btnEmoji('pavo_apply', '📝'))
         .setStyle(ButtonStyle.Primary)
     );
   }
@@ -158,17 +159,17 @@ function buildControlsRow(ticketInfo) {
     new ButtonBuilder()
       .setCustomId('ticket_vouch')
       .setLabel('Vouch')
-      .setEmoji('⭐')
+      .setEmoji(btnEmoji('pavo_vouch', '⭐'))
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId('ticket_close')
       .setLabel('Close Ticket')
-      .setEmoji('🔒')
+      .setEmoji(btnEmoji('pavo_close', '🔒'))
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('ticket_delete')
       .setLabel('Delete Ticket')
-      .setEmoji('🗑️')
+      .setEmoji(btnEmoji('pavo_delete', '🗑️'))
       .setStyle(ButtonStyle.Danger)
   );
   return row;
@@ -632,7 +633,7 @@ async function handleModal(interaction, config) {
       new ButtonBuilder()
         .setCustomId('app_start')
         .setLabel(`Continue to Part ${page + 1}/${pages.length}`)
-        .setEmoji('📝')
+        .setEmoji(btnEmoji('pavo_apply', '📝'))
         .setStyle(ButtonStyle.Primary)
     );
     return interaction.editReply({

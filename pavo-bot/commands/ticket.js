@@ -24,6 +24,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const db = require('../database');
+const { btnEmoji } = require('../utils/buttonEmoji');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
 const dmNotifier = require('../utils/dmNotifier');
 
@@ -160,7 +161,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     new ButtonBuilder()
       .setCustomId('ticket_close')
       .setLabel('Close')
-      .setEmoji('🔒')
+      .setEmoji(btnEmoji('pavo_close', '🔒'))
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId('ticket_add_user')
@@ -184,7 +185,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     new ButtonBuilder()
       .setCustomId('ticket_vouch')
       .setLabel('Vouch')
-      .setEmoji('⭐')
+      .setEmoji(btnEmoji('pavo_vouch', '⭐'))
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -729,7 +730,7 @@ module.exports = {
           const vouchBtn = new ButtonBuilder()
             .setCustomId('ticket_vouch')
             .setLabel('Vouch')
-            .setEmoji('⭐')
+            .setEmoji(btnEmoji('pavo_vouch', '⭐'))
             .setStyle(ButtonStyle.Secondary);
 
           if (rows.length > 0 && rows[rows.length - 1].components.length < 5) {
@@ -1086,17 +1087,17 @@ module.exports = {
         new ButtonBuilder()
           .setCustomId('ticket_vouch')
           .setLabel('Vouch')
-          .setEmoji('⭐')
+          .setEmoji(btnEmoji('pavo_vouch', '⭐'))
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId('ticket_reopen')
           .setLabel('Reopen Ticket')
-          .setEmoji('🔓')
+          .setEmoji(btnEmoji('pavo_reopen', '🔓'))
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId('ticket_delete')
           .setLabel('Delete Ticket')
-          .setEmoji('🗑️')
+          .setEmoji(btnEmoji('pavo_delete', '🗑️'))
           .setStyle(ButtonStyle.Danger)
       );
 
@@ -1278,7 +1279,7 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('ticket_close')
             .setLabel('Close Ticket')
-            .setEmoji('🔒')
+            .setEmoji(btnEmoji('pavo_close', '🔒'))
             .setStyle(ButtonStyle.Danger),
           new ButtonBuilder()
             .setCustomId('ticket_purchase')
@@ -1288,7 +1289,7 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('ticket_vouch')
             .setLabel('Vouch')
-            .setEmoji('⭐')
+            .setEmoji(btnEmoji('pavo_vouch', '⭐'))
             .setStyle(ButtonStyle.Secondary)
         );
 
@@ -1506,7 +1507,7 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('ticket_vouch')
             .setLabel('Vouch')
-            .setEmoji('⭐')
+            .setEmoji(btnEmoji('pavo_vouch', '⭐'))
             .setStyle(ButtonStyle.Primary)
         );
 

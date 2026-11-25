@@ -106,6 +106,7 @@ let backgroundTasksStarted = false;
 
 // Bot Ready event
 client.once('ready', async () => {
+  require('./utils/buttonEmoji').setClient(client);
   console.log("=========================================");
   console.log(`🤖 Pavo Bot logged in as: ${client.user.tag}`);
   console.log("=========================================");

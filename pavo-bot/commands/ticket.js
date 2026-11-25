@@ -323,12 +323,12 @@ function buildTicketMenuOptions(config) {
 // Banner ticket panel (Components V2): banner + one row per ticket type with its own button
 // ---------------------------------------------------------------------------
 const PANEL_ROWS = {
-  key_license: { label: 'Key / License', question: 'Problems with your key or license?', fallback: '🔑', keywords: ['key', 'license', 'lock'] },
+  key_license: { label: 'Key / License', question: 'Problems with your key or license?', fallback: '🔑', keywords: ['licenzafuturisticaconchiaveanima', 'key', 'license', 'lock'] },
   report_issue: { label: 'Report', question: 'Need to report a member or an incident?', fallback: '🚨', keywords: ['report', 'alert', 'warn', 'siren'] },
   other_support: { label: 'Other', question: 'Not sure which category fits your request?', fallback: '💡', keywords: ['other', 'dots', 'loading', 'question'] },
   orbs_pc: { label: 'Orbs PC', question: 'Want to purchase Orbs for PC?', fallback: '🖥️', keywords: ['orb', 'pc', 'computer'] },
   custom_bot: { label: 'Custom Discord Bot', question: 'Looking for a custom Discord bot?', fallback: '🤖', keywords: ['bot', 'robot', 'code'] },
-  pavo_hub_script: { label: "Buy Pavo's Hub Script", question: "Want to buy Pavo's Hub Script?", fallback: '🟦', keywords: ['hub', 'script', 'pavo', 'cart', 'shop', 'buy'] },
+  pavo_hub_script: { label: "Buy Pavo's Hub Script", question: "Want to buy Pavo's Hub Script?", fallback: '🟦', keywords: ['dashboardpavobestalneonanimato', 'hub', 'script', 'cart'] },
   general_support: { label: 'General Support', question: 'Have a question or need general assistance?', fallback: '🛠️', keywords: ['support', 'help', 'ticket', 'chat'] },
   mm_service: { label: 'MM Service', question: 'Need a trusted middleman for a trade?', fallback: '🤝', keywords: ['mm', 'handshake', 'trade', 'middle', 'money'] }
 };

@@ -49,6 +49,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,      // Required to fetch members for staff directory & welcome
+    GatewayIntentBits.GuildEmojisAndStickers, // Detect newly uploaded animated emojis for ticket buttons
     GatewayIntentBits.GuildMessages,     // Required to fetch ticket messages
     GatewayIntentBits.MessageContent     // Required to read message content for transcripts
   ]
@@ -241,6 +242,25 @@ client.once('ready', async () => {
     console.error('❌ Failed to initialize booster role/scheduler:', boosterInitErr);
   }
 });
+
+// Auto-refresh ticket panel + ticket buttons when server emojis change (e.g. new animated emojis uploaded)
+let emojiRefreshTimer = null;
+function scheduleEmojiRefresh() {
+  if (emojiRefreshTimer) clearTimeout(emojiRefreshTimer);
+  emojiRefreshTimer = setTimeout(async () => {
+    emojiRefreshTimer = null;
+    try {
+      console.log('✨ [EMOJIS] Server emojis changed. Refreshing ticket panel and ticket buttons...');
+      await ticketCmd.sendTicketPanel(client, config);
+      await ticketCmd.ensureVouchButtonInExistingTickets(client, config);
+    } catch (err) {
+      console.error('[EMOJIS] Refresh failed:', err.message);
+    }
+  }, 30 * 1000);
+}
+client.on('emojiCreate', scheduleEmojiRefresh);
+client.on('emojiUpdate', scheduleEmojiRefresh);
+client.on('emojiDelete', scheduleEmojiRefresh);
 
 // Dedicated PavoTweak Command Channel Auto-Cleanup Listener
 client.on('messageCreate', async message => {

@@ -18,6 +18,7 @@ const oauthCmd = require('./commands/oauth');
 const licenseCmd = require('./commands/license');
 const legitCheckCmd = require('./commands/legitCheck');
 const applicationsCmd = require('./commands/applications');
+const staffPanels = require('./commands/staffPanels');
 const pavoBoosterCmd = require('./commands/pavoBooster');
 const boosterApi = require('./services/boosterApi');
 const OAuthServer = require('./oauthServer');
@@ -183,6 +184,14 @@ client.once('ready', async () => {
     console.error('❌ Failed to initialize applications panel:', appPanelErr);
   }
 
+  // Send or update Staff Info & Confirm Purchase panels
+  try {
+    await staffPanels.sendOrUpdateStaffInfoPanel(client, config);
+    await staffPanels.sendOrUpdateConfirmPurchasePanel(client, config);
+  } catch (staffPanelErr) {
+    console.error('❌ Failed to initialize staff panels:', staffPanelErr);
+  }
+
   // Send or update Pavo Hub legit check panel if configured
   try {
     await legitCheckCmd.sendOrUpdateLegitCheck(client, config);
@@ -262,10 +271,15 @@ client.on('emojiCreate', scheduleEmojiRefresh);
 client.on('emojiUpdate', scheduleEmojiRefresh);
 client.on('emojiDelete', scheduleEmojiRefresh);
 
-// Dedicated PavoTweak Command Channel Auto-Cleanup Listener
+// Dedicated PavoTweak Command Channel Auto-Cleanup Listener + Staff Message Tracker
 client.on('messageCreate', async message => {
   try {
     if (!message.guild || message.author.bot) return;
+
+    // Count persistent messages sent by any staff member
+    if (message.member && staffPanels.isAnyStaff(message.member, baseConfig)) {
+      await db.recordStaffMessage(message.author.id, message.author.username);
+    }
 
     const cmdChannelId = config.pavoCommandChannelId;
     if (cmdChannelId && message.channel.id === cmdChannelId) {
@@ -496,6 +510,18 @@ client.on('interactionCreate', async interaction => {
           await interaction.reply(errMsg).catch(() => {});
         }
       }
+    } else if (customId.startsWith('staffpanel_')) {
+      try {
+        await staffPanels.handleButton(interaction, config);
+      } catch (err) {
+        console.error(`Error handling staff panel button interaction:`, err);
+        const errMsg = { content: `❌ Error handling action: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(errMsg).catch(() => {});
+        } else {
+          await interaction.reply(errMsg).catch(() => {});
+        }
+      }
     }
   }
 
@@ -519,6 +545,16 @@ client.on('interactionCreate', async interaction => {
       } catch (err) {
         console.error('Error submitting application modal:', err);
         const errMsg = { content: `❌ Error submitting application: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
+        else await interaction.reply(errMsg).catch(() => {});
+      }
+    }
+    else if (customId.startsWith('staffpanel_purchase_modal:')) {
+      try {
+        await staffPanels.handleModal(interaction, config);
+      } catch (err) {
+        console.error('Error submitting staff purchase modal:', err);
+        const errMsg = { content: `❌ Error recording purchase: ${err.message}`, ephemeral: true };
         if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => {});
         else await interaction.reply(errMsg).catch(() => {});
       }
@@ -550,6 +586,18 @@ client.on('interactionCreate', async interaction => {
         await ticketCmd.handleSelectProduct(interaction, config);
       } catch (err) {
         console.error(`Error handling string select interaction:`, err);
+        const errMsg = { content: `❌ Error handling selection: ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(errMsg).catch(() => {});
+        } else {
+          await interaction.reply(errMsg).catch(() => {});
+        }
+      }
+    } else if (interaction.customId.startsWith('staffpanel_select_')) {
+      try {
+        await staffPanels.handleSelectMenu(interaction, config);
+      } catch (err) {
+        console.error(`Error handling staff panel select interaction:`, err);
         const errMsg = { content: `❌ Error handling selection: ${err.message}`, ephemeral: true };
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(errMsg).catch(() => {});

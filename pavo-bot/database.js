@@ -70,6 +70,7 @@ async function mergeCloudSnapshot(wrapper) {
         tickets_closed: Math.max(cur.tickets_closed || 0, s.tickets_closed || 0),
         tickets_handled: Math.max(cur.tickets_handled || 0, s.tickets_handled || 0),
         sales_count: Math.max(cur.sales_count || 0, s.sales_count || 0),
+        messages_sent: Math.max(cur.messages_sent || 0, s.messages_sent || 0),
         total_earnings: Math.max(Number(cur.total_earnings || 0), Number(s.total_earnings || 0)),
         join_date: cur.join_date || s.join_date || null,
         last_active_at: s.last_active_at || cur.last_active_at || null
@@ -431,6 +432,7 @@ async function ensureStaffExists(discordId, username) {
       tickets_closed: 0,
       tickets_handled: 0,
       sales_count: 0,
+      messages_sent: 0,
       total_earnings: 0.0,
       join_date: joinDate,
       last_active_at: now
@@ -454,6 +456,10 @@ async function ensureStaffExists(discordId, username) {
       dbData.staff[discordId].tickets_closed = 0;
       changed = true;
     }
+    if (typeof dbData.staff[discordId].messages_sent !== 'number') {
+      dbData.staff[discordId].messages_sent = 0;
+      changed = true;
+    }
     if (changed) {
       storage.upsertStaff(dbData.staff[discordId]);
     }
@@ -471,6 +477,13 @@ async function getAllStaffStats() {
 async function recordStaffTicketOpened(staffId, staffUsername) {
   await ensureStaffExists(staffId, staffUsername);
   dbData.staff[staffId].tickets_opened = (dbData.staff[staffId].tickets_opened || 0) + 1;
+  dbData.staff[staffId].last_active_at = new Date().toISOString();
+  storage.upsertStaff(dbData.staff[staffId]);
+}
+
+async function recordStaffMessage(staffId, staffUsername) {
+  await ensureStaffExists(staffId, staffUsername);
+  dbData.staff[staffId].messages_sent = (dbData.staff[staffId].messages_sent || 0) + 1;
   dbData.staff[staffId].last_active_at = new Date().toISOString();
   storage.upsertStaff(dbData.staff[staffId]);
 }
@@ -645,6 +658,12 @@ async function getSalesByUser(staffId) {
     commission,
     recent: list.slice(0, 10)
   };
+}
+
+async function getAllSalesByUser(staffId) {
+  return dbData.sales
+    .filter(s => s.staff_id === staffId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 async function getSalesLeaderboard() {
@@ -1290,6 +1309,7 @@ module.exports = {
   getStaffInfo,
   getAllStaffStats,
   recordStaffTicketOpened,
+  recordStaffMessage,
   createTicket,
   claimTicket,
   closeTicket,
@@ -1298,6 +1318,7 @@ module.exports = {
   setRoleCommissionPercentage,
   getSalesStats,
   getSalesByUser,
+  getAllSalesByUser,
   getSalesLeaderboard,
   getUserOpenTicket,
   getUserOpenApplication,

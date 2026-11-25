@@ -3,7 +3,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { Pool } = require('pg');
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
 
@@ -114,6 +114,7 @@ function initSqliteSchema() {
       tickets_closed INTEGER NOT NULL DEFAULT 0,
       tickets_handled INTEGER NOT NULL DEFAULT 0,
       sales_count INTEGER NOT NULL DEFAULT 0,
+      messages_sent INTEGER NOT NULL DEFAULT 0,
       total_earnings REAL NOT NULL DEFAULT 0,
       join_date TEXT,
       last_active_at TEXT
@@ -279,6 +280,12 @@ function initSqliteSchema() {
     ensureSqliteColumn('tickets', 'vouch_requested_at', 'TEXT');
     sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)')
       .run(3, 'Add ticket vouch status columns', new Date().toISOString());
+  }
+
+  if (applied < 4) {
+    ensureSqliteColumn('staff', 'messages_sent', 'INTEGER NOT NULL DEFAULT 0');
+    sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)')
+      .run(4, 'Add staff messages_sent column', new Date().toISOString());
   }
 }
 
@@ -447,6 +454,7 @@ async function initPostgresSchema() {
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS tickets_opened INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS tickets_claimed INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS tickets_closed INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE staff ADD COLUMN IF NOT EXISTS messages_sent INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE staff ADD COLUMN IF NOT EXISTS last_active_at TEXT;
       ALTER TABLE giveaways ADD COLUMN IF NOT EXISTS preset_winners_json TEXT NOT NULL DEFAULT '[]';
       ALTER TABLE tickets ADD COLUMN IF NOT EXISTS vouch_requested INTEGER NOT NULL DEFAULT 0;
@@ -500,8 +508,8 @@ async function flush() {
 function upsertStaff(s) {
   if (mode === 'sqlite') {
     sqlite.prepare(`
-      INSERT INTO staff (discord_id, username, tickets_opened, tickets_claimed, tickets_closed, tickets_handled, sales_count, total_earnings, join_date, last_active_at)
-      VALUES (@discord_id, @username, @tickets_opened, @tickets_claimed, @tickets_closed, @tickets_handled, @sales_count, @total_earnings, @join_date, @last_active_at)
+      INSERT INTO staff (discord_id, username, tickets_opened, tickets_claimed, tickets_closed, tickets_handled, sales_count, messages_sent, total_earnings, join_date, last_active_at)
+      VALUES (@discord_id, @username, @tickets_opened, @tickets_claimed, @tickets_closed, @tickets_handled, @sales_count, @messages_sent, @total_earnings, @join_date, @last_active_at)
       ON CONFLICT(discord_id) DO UPDATE SET
         username = excluded.username,
         tickets_opened = excluded.tickets_opened,
@@ -509,6 +517,7 @@ function upsertStaff(s) {
         tickets_closed = excluded.tickets_closed,
         tickets_handled = excluded.tickets_handled,
         sales_count = excluded.sales_count,
+        messages_sent = excluded.messages_sent,
         total_earnings = excluded.total_earnings,
         join_date = COALESCE(staff.join_date, excluded.join_date),
         last_active_at = excluded.last_active_at
@@ -520,6 +529,7 @@ function upsertStaff(s) {
       tickets_closed: s.tickets_closed || 0,
       tickets_handled: s.tickets_handled || 0,
       sales_count: s.sales_count || 0,
+      messages_sent: s.messages_sent || 0,
       total_earnings: Number(s.total_earnings || 0),
       join_date: s.join_date || null,
       last_active_at: s.last_active_at || null
@@ -527,8 +537,8 @@ function upsertStaff(s) {
   } else {
     const copy = { ...s };
     enqueuePg(() => pgPool.query(
-      `INSERT INTO staff (discord_id, username, tickets_opened, tickets_claimed, tickets_closed, tickets_handled, sales_count, total_earnings, join_date, last_active_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO staff (discord_id, username, tickets_opened, tickets_claimed, tickets_closed, tickets_handled, sales_count, messages_sent, total_earnings, join_date, last_active_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT(discord_id) DO UPDATE SET
          username = EXCLUDED.username,
          tickets_opened = EXCLUDED.tickets_opened,
@@ -536,6 +546,7 @@ function upsertStaff(s) {
          tickets_closed = EXCLUDED.tickets_closed,
          tickets_handled = EXCLUDED.tickets_handled,
          sales_count = EXCLUDED.sales_count,
+         messages_sent = EXCLUDED.messages_sent,
          total_earnings = EXCLUDED.total_earnings,
          join_date = COALESCE(staff.join_date, EXCLUDED.join_date),
          last_active_at = EXCLUDED.last_active_at`,
@@ -547,6 +558,7 @@ function upsertStaff(s) {
         copy.tickets_closed || 0,
         copy.tickets_handled || 0,
         copy.sales_count || 0,
+        copy.messages_sent || 0,
         Number(copy.total_earnings || 0),
         copy.join_date || null,
         copy.last_active_at || null
@@ -903,6 +915,7 @@ async function loadAllInto(dbData) {
       tickets_closed: r.tickets_closed || 0,
       tickets_handled: r.tickets_handled || 0,
       sales_count: r.sales_count || 0,
+      messages_sent: r.messages_sent || 0,
       total_earnings: Number(r.total_earnings || 0),
       join_date: r.join_date || null,
       last_active_at: r.last_active_at || null

@@ -49,6 +49,8 @@
   "pavoCommandChannelId": "1546601794606731305",
   "legitCheckChannelId": "1546615108325736558",
   "staffLogChannelId": "1554853665230159945",
+  "staffInfoPanelChannelId": "1575291641411932300",
+  "confirmPurchasePanelChannelId": "1575292386085441556",
   "botLogChannelId": "1554853667381710870",
   "gameResultsChannelId": "1554856588169453568",
   "welcomeChannelId": "1554856579478593537",

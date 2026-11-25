@@ -180,6 +180,7 @@ module.exports = {
             { name: '🛡️ Staff Role', value: `**${currentRole}**`, inline: true },
             { name: '📅 Date Joined Staff', value: dbInfo.join_date || 'Unknown', inline: true },
             { name: '🕒 Last Active', value: lastActiveText, inline: true },
+            { name: '💬 Messages Sent', value: `\`${dbInfo.messages_sent || 0}\``, inline: true },
             { name: '📂 Tickets Opened', value: `\`${dbInfo.tickets_opened || 0}\``, inline: true },
             { name: '✋ Tickets Claimed', value: `\`${dbInfo.tickets_claimed || 0}\``, inline: true },
             { name: '🔒 Tickets Closed', value: `\`${dbInfo.tickets_closed || 0}\``, inline: true },

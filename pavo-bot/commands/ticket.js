@@ -10,8 +10,19 @@ const {
   TextInputBuilder,
   TextInputStyle,
   StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder
+  StringSelectMenuOptionBuilder,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  MessageFlags,
+  AttachmentBuilder
 } = require('discord.js');
+const path = require('path');
+const fs = require('fs');
 const db = require('../database');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
 const dmNotifier = require('../utils/dmNotifier');
@@ -308,6 +319,78 @@ function buildTicketMenuOptions(config) {
   return options;
 }
 
+// ---------------------------------------------------------------------------
+// Banner ticket panel (Components V2): banner + one row per ticket type with its own button
+// ---------------------------------------------------------------------------
+const PANEL_ROWS = {
+  key_license: { label: 'Key / License', question: 'Problems with your key or license?', fallback: '🔑', keywords: ['key', 'license', 'lock'] },
+  report_issue: { label: 'Report', question: 'Need to report a member or an incident?', fallback: '🚨', keywords: ['report', 'alert', 'warn', 'siren'] },
+  other_support: { label: 'Other', question: 'Not sure which category fits your request?', fallback: '💡', keywords: ['other', 'dots', 'loading', 'question'] },
+  orbs_pc: { label: 'Orbs PC', question: 'Want to purchase Orbs for PC?', fallback: '🖥️', keywords: ['orb', 'pc', 'computer'] },
+  custom_bot: { label: 'Custom Discord Bot', question: 'Looking for a custom Discord bot?', fallback: '🤖', keywords: ['bot', 'robot', 'code'] },
+  pavo_hub_script: { label: "Buy Pavo's Hub Script", question: "Want to buy Pavo's Hub Script?", fallback: '🟦', keywords: ['hub', 'script', 'pavo', 'cart', 'shop', 'buy'] },
+  general_support: { label: 'General Support', question: 'Have a question or need general assistance?', fallback: '🛠️', keywords: ['support', 'help', 'ticket', 'chat'] },
+  mm_service: { label: 'MM Service', question: 'Need a trusted middleman for a trade?', fallback: '🤝', keywords: ['mm', 'handshake', 'trade', 'middle', 'money'] }
+};
+
+// Picks an animated emoji for a ticket type: config override first, then a matching animated server emoji, then unicode
+function resolvePanelEmoji(client, config, value) {
+  const spec = PANEL_ROWS[value];
+  const override = config.ticketPanel?.emojis?.[value];
+  if (override) {
+    if (typeof override === 'string') {
+      const m = override.match(/^<(a?):(\w+):(\d+)>$/);
+      if (m) return { animated: m[1] === 'a', name: m[2], id: m[3] };
+      return override;
+    }
+    return override;
+  }
+  const animated = client.emojis.cache.filter(e => e.animated && e.available !== false);
+  for (const kw of spec.keywords) {
+    const found = animated.find(e => e.name.toLowerCase().includes(kw));
+    if (found) return { animated: true, name: found.name, id: found.id };
+  }
+  return spec.fallback;
+}
+
+async function buildTicketPanelPayload(client, guild, config) {
+  const bannerPath = path.join(__dirname, '..', 'assets', 'ticket-banner.gif');
+  const hasBanner = fs.existsSync(bannerPath);
+
+  const container = new ContainerBuilder().setAccentColor(parseInt(String(config.embedColor || '#4f46e5').replace('#', ''), 16));
+
+  if (hasBanner) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('attachment://ticket-banner.gif'))
+    );
+  }
+
+  const available = new Set(buildTicketMenuOptions(config).map(o => o.toJSON().value));
+  const order = TICKET_MENU_ORDER.filter(v => available.has(v) && PANEL_ROWS[v]);
+
+  order.forEach((value, idx) => {
+    const spec = PANEL_ROWS[value];
+    container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`**${spec.question}**\nPress **${spec.label}** to open the matching ticket flow.`)
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(`ticket_cat:${value}`)
+            .setLabel(spec.label)
+            .setEmoji(resolvePanelEmoji(client, config, value))
+            .setStyle(ButtonStyle.Secondary)
+        )
+    );
+  });
+
+  const payload = { components: [container], flags: MessageFlags.IsComponentsV2 };
+  if (hasBanner) payload.files = [new AttachmentBuilder(bannerPath, { name: 'ticket-banner.gif' })];
+  return payload;
+}
+
 // Lazy-loaded to avoid a circular require between ticket.js and applications.js
 function getApplications() {
   return require('./applications');
@@ -502,6 +585,7 @@ const vouchCommand = {
 
 module.exports = {
   vouchCommand,
+  buildTicketPanelPayload,
   resolveTicketCategoryId,
   buildTicketMenuOptions,
   SUPPORT_TYPES,
@@ -571,41 +655,21 @@ module.exports = {
     }
 
     try {
-      // Scan last 50 messages to see if panel already exists
+      // Remove any previous ticket panel (old embed panel or previous banner panel) so only ONE panel exists
       const messages = await channel.messages.fetch({ limit: 50 });
-      const panelExists = messages.some(msg =>
-        msg.author.id === client.user.id &&
-        msg.embeds.length > 0 &&
-        msg.embeds[0].title === 'Pavo Support'
+      const oldPanels = messages.filter(msg =>
+        msg.author.id === client.user.id && (
+          (msg.embeds.length > 0 && msg.embeds[0].title === 'Pavo Support') ||
+          (msg.components || []).some(c => JSON.stringify(c.toJSON ? c.toJSON() : c).includes('ticket_cat:') || JSON.stringify(c.toJSON ? c.toJSON() : c).includes('ticket_open_btn'))
+        )
       );
-
-      if (panelExists) {
-        console.log('✅ Support ticket panel already exists. Skipping panel creation.');
-        return;
+      for (const old of oldPanels.values()) {
+        await old.delete().catch(() => {});
       }
 
-      // Send the professional panel embed
-      const panelEmbed = new EmbedBuilder()
-        .setTitle('Pavo Support')
-        .setDescription('Need help or want to purchase one of our products?\nOpen a ticket below and select what you\'re interested in.')
-        .setColor(config.embedColor || '#4f46e5')
-        .setFooter({ text: 'Pavo Tweak · Premium Support' })
-        .setTimestamp();
-
-      if (channel.guild) {
-        panelEmbed.setThumbnail(channel.guild.iconURL({ dynamic: true }) || null);
-      }
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('ticket_open_btn')
-          .setLabel('Open Ticket to Buy')
-          .setEmoji('🎫')
-          .setStyle(ButtonStyle.Success)
-      );
-
-      await channel.send({ embeds: [panelEmbed], components: [row] });
-      console.log('🆕 Created new support ticket panel in channel: ' + channel.name);
+      const panelPayload = await buildTicketPanelPayload(client, channel.guild, config);
+      await channel.send(panelPayload);
+      console.log('🆕 Created new banner ticket panel in channel: ' + channel.name);
     } catch (err) {
       console.error('Error during ticket panel initialization:', err);
     }
@@ -678,8 +742,8 @@ module.exports = {
   },
 
   // Handle product selections from dropdown menu
-  async handleSelectProduct(interaction, config) {
-    const product = interaction.values[0];
+  async handleSelectProduct(interaction, config, productOverride = null) {
+    const product = productOverride || interaction.values[0];
     const user = interaction.user;
 
     // Double check active ticket count limit
@@ -748,8 +812,13 @@ module.exports = {
     const staffRoleName = getStaffRoleName(member, config);
     const isStaff = staffRoleName !== null;
 
-    // BUTTON: Open Ticket Clicked (from Support Panel)
-    if (customId === 'ticket_open_btn') {
+    // BUTTON: category button on the banner panel -> open that ticket type directly
+    if (customId.startsWith('ticket_cat:')) {
+      return this.handleSelectProduct(interaction, config, customId.slice('ticket_cat:'.length));
+    }
+
+    // BUTTON: Open Ticket Clicked (legacy panel)
+    else if (customId === 'ticket_open_btn') {
       // Verify active ticket limit
       if (await hasActiveTicket(interaction.guild, interaction.user.id)) {
         return interaction.reply({

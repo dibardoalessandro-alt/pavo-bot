@@ -254,7 +254,7 @@ function resolveTicketCategoryId(typeValue, config) {
       return cats.pavoHubCategoryId || '1571585519270498429';
     case 'report_issue':
     case 'general_support':
-      return cats.supportCategoryId || '1571586158452932729';
+      return cats.supportCategoryId || '1571944513335857283';
     case 'mm_service':
       return process.env.MM_SERVICE_CATEGORY_ID || cats.mmServiceCategoryId || '1571597907537297499';
     case '1v1_issue':
@@ -626,6 +626,7 @@ module.exports = {
         '1571585376815030272',
         '1571585519270498429',
         '1571586158452932729',
+        '1571944513335857283',
         '1571597907537297499',
         '1571588433288106194',
         '1571585726078783680',

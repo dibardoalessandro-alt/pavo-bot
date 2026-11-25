@@ -153,12 +153,12 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     .setFooter({ text: footerText, iconURL: guild.iconURL() || null })
     .setTimestamp();
 
-  // Buttons inside the active ticket
+  // Buttons inside the active ticket (single row, max 5 buttons)
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket_claim')
       .setLabel('Claim Ticket')
-      .setEmoji('📥')
+      .setEmoji(btnEmoji('pavo_claim', '📥'))
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('ticket_close')
@@ -168,22 +168,13 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     new ButtonBuilder()
       .setCustomId('ticket_add_user')
       .setLabel('Add User')
-      .setEmoji('➕')
+      .setEmoji(btnEmoji('pavo_adduser', '➕'))
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('ticket_remove_user')
       .setLabel('Remove User')
-      .setEmoji('➖')
+      .setEmoji(btnEmoji('pavo_removeuser', '➖'))
       .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('ticket_purchase')
-      .setLabel('Purchase')
-      .setEmoji('💰')
-      .setStyle(ButtonStyle.Success)
-  );
-
-  // Second row: Vouch button (staff with vouch access only)
-  const vouchRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket_vouch')
       .setLabel('Vouch')
@@ -196,7 +187,7 @@ async function createTicketChannel(interaction, config, productName, channelSuff
   const welcomeMsg = await channel.send({
     content: `<@${user.id}>${pingRoleId ? ` | <@&${pingRoleId}>` : ''}`,
     embeds: [welcomeEmbed],
-    components: [row, vouchRow]
+    components: [row]
   });
 
   // Track staff-opened tickets if creator is a staff member
@@ -725,21 +716,51 @@ module.exports = {
           const welcomeMsg = await findWelcomeMessage(channel, ticketInfo);
           if (!welcomeMsg || welcomeMsg.author?.id !== client.user.id) continue;
 
-          const rows = (welcomeMsg.components || []).map(r => ActionRowBuilder.from(r));
-          const hasVouchBtn = rows.some(r => r.components.some(c => c.data?.custom_id === 'ticket_vouch'));
-          if (hasVouchBtn) continue;
+          // Normalize buttons on existing tickets: drop the removed Purchase button, apply animated emojis, ensure Vouch exists
+          const emojiByButton = {
+            ticket_claim: ['pavo_claim', '📥'],
+            ticket_close: ['pavo_close', '🔒'],
+            ticket_add_user: ['pavo_adduser', '➕'],
+            ticket_remove_user: ['pavo_removeuser', '➖'],
+            ticket_vouch: ['pavo_vouch', '⭐'],
+            ticket_reopen: ['pavo_reopen', '🔓'],
+            ticket_delete: ['pavo_delete', '🗑️'],
+            app_start: ['pavo_apply', '📝']
+          };
+          const before = JSON.stringify((welcomeMsg.components || []).map(r => r.toJSON()));
 
-          const vouchBtn = new ButtonBuilder()
-            .setCustomId('ticket_vouch')
-            .setLabel('Vouch')
-            .setEmoji(btnEmoji('pavo_vouch', '⭐'))
-            .setStyle(ButtonStyle.Secondary);
-
-          if (rows.length > 0 && rows[rows.length - 1].components.length < 5) {
-            rows[rows.length - 1].addComponents(vouchBtn);
-          } else if (rows.length < 5) {
-            rows.push(new ActionRowBuilder().addComponents(vouchBtn));
+          let rows = (welcomeMsg.components || []).map(r => ActionRowBuilder.from(r));
+          for (const r of rows) {
+            r.setComponents(r.components.filter(c => c.data?.custom_id !== 'ticket_purchase'));
+            for (const c of r.components) {
+              const spec = emojiByButton[c.data?.custom_id];
+              if (spec) c.setEmoji(btnEmoji(spec[0], spec[1]));
+            }
           }
+          rows = rows.filter(r => r.components.length > 0);
+
+          const hasVouchBtn = rows.some(r => r.components.some(c => c.data?.custom_id === 'ticket_vouch'));
+          if (!hasVouchBtn && ticketInfo?.status !== 'CLOSED') {
+            const vouchBtn = new ButtonBuilder()
+              .setCustomId('ticket_vouch')
+              .setLabel('Vouch')
+              .setEmoji(btnEmoji('pavo_vouch', '⭐'))
+              .setStyle(ButtonStyle.Secondary);
+            if (rows.length > 0 && rows[rows.length - 1].components.length < 5) {
+              rows[rows.length - 1].addComponents(vouchBtn);
+            } else if (rows.length < 5) {
+              rows.push(new ActionRowBuilder().addComponents(vouchBtn));
+            }
+          }
+
+          // Merge a lone Vouch row into the first row when there is space (single clean row)
+          if (rows.length === 2 && rows[1].components.length === 1 && rows[0].components.length < 5) {
+            rows[0].addComponents(rows[1].components[0]);
+            rows.pop();
+          }
+
+          const after = JSON.stringify(rows.map(r => r.toJSON()));
+          if (before === after) continue;
 
           await welcomeMsg.edit({ components: rows }).catch(() => {});
           updatedCount++;
@@ -1014,58 +1035,9 @@ module.exports = {
       await this.handleDeleteTicketAction(interaction, config, channel, member);
     }
 
-    // BUTTON: Purchase Completed Modal Summon
+    // BUTTON: Purchase (removed). Old messages are cleaned on startup; this just guards stale clicks.
     else if (customId === 'ticket_purchase') {
-      if (!isStaff) {
-        return interaction.reply({ content: '❌ Only staff members can record verified purchases.', ephemeral: true });
-      }
-
-      // Show Purchase Completed Modal (pre-filling ticket owner ID if available)
-      const currentTicket = await db.getTicket(channel.id);
-      const modal = new ModalBuilder()
-        .setCustomId('ticket_purchase_modal')
-        .setTitle('Record Verified Purchase');
-
-      const customerInput = new TextInputBuilder()
-        .setCustomId('customer_input')
-        .setLabel('Customer (Discord ID or Username)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('e.g., 123456789012345678 or username')
-        .setRequired(true);
-
-      if (currentTicket?.creator_id && /^\d+$/.test(String(currentTicket.creator_id))) {
-        customerInput.setValue(String(currentTicket.creator_id));
-      }
-
-      const productInput = new TextInputBuilder()
-        .setCustomId('product_input')
-        .setLabel('Product Name')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('e.g., Pavo Tweak Lifetime')
-        .setRequired(true);
-
-      const priceInput = new TextInputBuilder()
-        .setCustomId('price_input')
-        .setLabel('Price in USD (Numeric, e.g. 50.00)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('50.00')
-        .setRequired(true);
-
-      const methodInput = new TextInputBuilder()
-        .setCustomId('method_input')
-        .setLabel('Payment Method')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('PayPal, LTC, or Boosts')
-        .setRequired(true);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(customerInput),
-        new ActionRowBuilder().addComponents(productInput),
-        new ActionRowBuilder().addComponents(priceInput),
-        new ActionRowBuilder().addComponents(methodInput)
-      );
-
-      await interaction.showModal(modal);
+      return interaction.reply({ content: 'ℹ️ This button has been removed.', ephemeral: true });
     }
   },
 
@@ -1275,7 +1247,7 @@ module.exports = {
           new ButtonBuilder()
             .setCustomId('ticket_claim')
             .setLabel('Claim Ticket')
-            .setEmoji('📥')
+            .setEmoji(btnEmoji('pavo_claim', '📥'))
             .setStyle(ButtonStyle.Primary)
             .setDisabled(claimedBy !== null),
           new ButtonBuilder()
@@ -1283,11 +1255,6 @@ module.exports = {
             .setLabel('Close Ticket')
             .setEmoji(btnEmoji('pavo_close', '🔒'))
             .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('ticket_purchase')
-            .setLabel('Purchase Completed')
-            .setEmoji('💰')
-            .setStyle(ButtonStyle.Success),
           new ButtonBuilder()
             .setCustomId('ticket_vouch')
             .setLabel('Vouch')

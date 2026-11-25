@@ -262,6 +262,7 @@ function scheduleEmojiRefresh() {
       console.log('✨ [EMOJIS] Server emojis changed. Refreshing ticket panel and ticket buttons...');
       await ticketCmd.sendTicketPanel(client, config);
       await ticketCmd.ensureVouchButtonInExistingTickets(client, config);
+      await applicationsCmd.sendOrUpdateApplicationPanel(client, config);
     } catch (err) {
       console.error('[EMOJIS] Refresh failed:', err.message);
     }

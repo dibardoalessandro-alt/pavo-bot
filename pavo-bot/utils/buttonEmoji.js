@@ -16,4 +16,15 @@ function btnEmoji(name, fallback) {
   return fallback;
 }
 
-module.exports = { setClient, btnEmoji };
+function textEmoji(name, fallback) {
+  try {
+    if (clientRef && clientRef.emojis && clientRef.emojis.cache) {
+      const lower = String(name).toLowerCase();
+      const found = clientRef.emojis.cache.find(e => e.name && e.name.toLowerCase() === lower && e.available !== false);
+      if (found) return `<${found.animated ? 'a' : ''}:${found.name}:${found.id}>`;
+    }
+  } catch (_) {}
+  return fallback;
+}
+
+module.exports = { setClient, btnEmoji, textEmoji };

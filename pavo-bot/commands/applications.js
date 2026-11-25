@@ -30,7 +30,7 @@ const {
   MessageFlags
 } = require('discord.js');
 const db = require('../database');
-const { btnEmoji } = require('../utils/buttonEmoji');
+const { btnEmoji, textEmoji } = require('../utils/buttonEmoji');
 const { positions, PARAGRAPH } = require('../applications.config');
 const { createChannelWithOverflow } = require('../utils/channelCategory');
 const dmNotifier = require('../utils/dmNotifier');
@@ -236,6 +236,12 @@ function isPositionOpen(key, config) {
   return key === 'beta_tester' || key === 'staff';
 }
 
+const APP_EMOJI_NAMES = {
+  content_creator: 'pavo_creator',
+  beta_tester: 'pavo_tester',
+  staff: 'pavo_staff'
+};
+
 function buildPanelEmbed(config, guild) {
   const embed = new EmbedBuilder()
     .setTitle(PANEL_TITLE)
@@ -250,14 +256,15 @@ function buildPanelEmbed(config, guild) {
         const statusText = open
           ? '🟢 **Status: Open / Accepting Applications**'
           : '🔴 **Status: Closed / Not Hiring At This Time**';
+        const posIcon = textEmoji(APP_EMOJI_NAMES[p.key], p.emoji);
         return {
-          name: `${p.emoji}  ${p.name}`,
+          name: `${posIcon}  ${p.name}`,
           value: `${p.panelSummary}\n${statusText}\n\u200b`,
           inline: false
         };
       }),
       {
-        name: '📋  Before You Apply',
+        name: `${textEmoji('pavo_rules', '📋')}  Before You Apply`,
         value:
           '• Read the requirements inside your ticket carefully\n' +
           '• Answer every question honestly and in detail\n' +
@@ -283,7 +290,7 @@ function buildPanelRows(config) {
     const button = new ButtonBuilder()
       .setCustomId(`app_open:${p.key}`)
       .setLabel(open ? `Apply for ${p.name}` : `${p.name} (Closed)`)
-      .setEmoji(open ? p.emoji : '🔒')
+      .setEmoji(open ? btnEmoji(APP_EMOJI_NAMES[p.key], p.emoji) : btnEmoji('pavo_close', '🔒'))
       .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
       .setDisabled(!open);
     return new ActionRowBuilder().addComponents(button);

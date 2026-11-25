@@ -27,8 +27,18 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  MessageFlags
+  MessageFlags,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  AttachmentBuilder
 } = require('discord.js');
+const path = require('path');
+const fs = require('fs');
 const db = require('../database');
 const { btnEmoji, textEmoji } = require('../utils/buttonEmoji');
 const { positions, PARAGRAPH } = require('../applications.config');
@@ -242,62 +252,84 @@ const APP_EMOJI_NAMES = {
   staff: 'pavo_staff'
 };
 
-function buildPanelEmbed(config, guild) {
-  const embed = new EmbedBuilder()
-    .setTitle(PANEL_TITLE)
-    .setColor(brandColor(config))
-    .setDescription(
-      'Pavo is expanding, and we are looking for dedicated members of the community to join our team.\n\n' +
-      'Review the available positions and their current status below:'
-    )
-    .addFields(
-      ...Object.values(positions).map(p => {
-        const open = isPositionOpen(p.key, config);
-        const statusText = open
-          ? '🟢 **Status: Open / Accepting Applications**'
-          : '🔴 **Status: Closed / Not Hiring At This Time**';
-        const posIcon = textEmoji(APP_EMOJI_NAMES[p.key], p.emoji);
-        return {
-          name: `${posIcon}  ${p.name}`,
-          value: `${p.panelSummary}\n${statusText}\n\u200b`,
-          inline: false
-        };
-      }),
-      {
-        name: `${textEmoji('pavo_rules', '📋')}  Before You Apply`,
-        value:
-          '• Read the requirements inside your ticket carefully\n' +
-          '• Answer every question honestly and in detail\n' +
-          '• One open application per position\n' +
-          '• Every application is reviewed manually by our team'
-      },
-      {
-        name: '\u200b',
-        value: 'Click an active button below to open your **private application ticket**.'
-      }
-    )
-    .setFooter({ text: FOOTER_TEXT, iconURL: guild?.iconURL() || undefined })
-    .setTimestamp();
+// Sleek Components V2 panel matching the banner ticket style
+async function buildApplicationPanelPayload(config, guild) {
+  try {
+    if (guild?.emojis?.fetch) await guild.emojis.fetch();
+  } catch (_) {}
 
-  const icon = guild?.iconURL({ size: 256 });
-  if (icon) embed.setThumbnail(icon);
-  return embed;
-}
+  const bannerPath = path.join(__dirname, '..', 'assets', 'apply-banner.gif');
+  const hasBanner = fs.existsSync(bannerPath);
 
-function buildPanelRows(config) {
-  return Object.values(positions).map(p => {
+  const container = new ContainerBuilder().setAccentColor(brandColor(config));
+
+  if (hasBanner) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL('attachment://apply-banner.gif')
+      )
+    );
+  }
+
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+  );
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `### ${PANEL_TITLE}\n` +
+      `Pavo is expanding, and we are looking for dedicated members to join our team. Choose an open position below to start your private application.`
+    )
+  );
+
+  for (const p of Object.values(positions)) {
     const open = isPositionOpen(p.key, config);
-    const button = new ButtonBuilder()
-      .setCustomId(`app_open:${p.key}`)
-      .setLabel(open ? `Apply for ${p.name}` : `${p.name} (Closed)`)
-      .setEmoji(open ? btnEmoji(APP_EMOJI_NAMES[p.key], p.emoji) : btnEmoji('pavo_close', '🔒'))
-      .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(!open);
-    return new ActionRowBuilder().addComponents(button);
-  });
+    const statusLine = open
+      ? '🟢 **Open — Accepting Applications**'
+      : '🔴 **Closed — Not Hiring Right Now**';
+
+    container.addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+    );
+
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**${p.name}** — ${statusLine}\n${p.panelSummary}`
+          )
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(`app_open:${p.key}`)
+            .setLabel(open ? `Apply: ${p.name}` : `${p.name} (Closed)`)
+            .setEmoji(open ? btnEmoji(APP_EMOJI_NAMES[p.key], p.emoji) : btnEmoji('pavo_close', '🔒'))
+            .setStyle(open ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!open)
+        )
+    );
+  }
+
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+  );
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `${textEmoji('pavo_rules', '📋')} **Before You Apply**\n` +
+      `• Read the requirements inside your ticket carefully  •  Answer every question honestly\n` +
+      `• One open application per position  •  Every application is reviewed manually by our team`
+    )
+  );
+
+  const payload = { components: [container], flags: MessageFlags.IsComponentsV2 };
+  if (hasBanner) {
+    payload.files = [new AttachmentBuilder(bannerPath, { name: 'apply-banner.gif' })];
+  }
+  return payload;
 }
 
-// Single clean unified panel message with stacked vertical buttons at the bottom
+// Single clean unified V2 banner panel in #apply (replaces any legacy embed panel)
 async function sendOrUpdateApplicationPanel(client, config) {
   const channelId = config.applications?.panelChannelId;
   if (!channelId) {
@@ -312,39 +344,19 @@ async function sendOrUpdateApplicationPanel(client, config) {
   }
 
   try {
-    const payload = {
-      embeds: [buildPanelEmbed(config, channel.guild)],
-      components: buildPanelRows(config)
-    };
+    const payload = await buildApplicationPanelPayload(config, channel.guild);
 
-    let panelMsg = null;
-    const stored = await db.getPanelMessage(PANEL_KEY);
-    if (stored && stored.channelId === channel.id && stored.messageId) {
-      panelMsg = await fetchMessageSafe(channel, stored.messageId);
-    }
-
-    // Clean up any extra/old bot messages in the channel (such as the separated cards)
+    // Delete previous bot messages so the V2 banner message posts cleanly
     const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
     if (recent) {
       const botMessages = recent.filter(m => m.author.id === client.user.id);
-      if (!panelMsg && botMessages.size > 0) {
-        panelMsg = botMessages.last();
-      }
       for (const m of botMessages.values()) {
-        if (panelMsg && m.id !== panelMsg.id) {
-          await m.delete().catch(() => {});
-        }
+        await m.delete().catch(() => {});
       }
     }
 
-    if (panelMsg) {
-      await panelMsg.edit(payload);
-      console.log(`[APPLICATIONS] Application panel updated in #${channel.name}`);
-    } else {
-      panelMsg = await channel.send(payload);
-      console.log(`[APPLICATIONS] Application panel posted in #${channel.name}`);
-    }
-
+    const panelMsg = await channel.send(payload);
+    console.log(`[APPLICATIONS] Banner application panel posted in #${channel.name}`);
     await db.setPanelMessage(PANEL_KEY, channel.id, panelMsg.id);
     return panelMsg;
   } catch (err) {

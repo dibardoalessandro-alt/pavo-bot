@@ -354,6 +354,13 @@ function resolvePanelEmoji(client, config, value) {
 }
 
 async function buildTicketPanelPayload(client, guild, config) {
+  // Make sure freshly uploaded server emojis are in the cache
+  try {
+    if (guild?.emojis?.fetch) await guild.emojis.fetch();
+  } catch (e) {
+    console.warn('[TICKET PANEL] Could not refresh guild emojis:', e.message);
+  }
+
   const bannerPath = path.join(__dirname, '..', 'assets', 'ticket-banner.gif');
   const hasBanner = fs.existsSync(bannerPath);
 
@@ -370,6 +377,8 @@ async function buildTicketPanelPayload(client, guild, config) {
 
   order.forEach((value, idx) => {
     const spec = PANEL_ROWS[value];
+    const panelEmoji = resolvePanelEmoji(client, config, value);
+    console.log(`[TICKET PANEL] ${value} -> ${typeof panelEmoji === 'string' ? panelEmoji + ' (fallback, no animated emoji found)' : `${panelEmoji.name} (${panelEmoji.id})`}`);
     container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
     container.addSectionComponents(
       new SectionBuilder()
@@ -380,7 +389,7 @@ async function buildTicketPanelPayload(client, guild, config) {
           new ButtonBuilder()
             .setCustomId(`ticket_cat:${value}`)
             .setLabel(spec.label)
-            .setEmoji(resolvePanelEmoji(client, config, value))
+            .setEmoji(panelEmoji)
             .setStyle(ButtonStyle.Secondary)
         )
     );

@@ -101,8 +101,10 @@ async function createTicketChannel(interaction, config, productName, channelSuff
     '1439210704291762258',
     '1538244553637634118'
   ]);
+  await guild.roles.fetch().catch(() => null);
   for (const roleId of staffAndVouchIds) {
-    if (roleId && String(roleId).match(/^\d+$/)) {
+    // Skip roles that don't exist in this server (avoids "not a cached User or Role" errors)
+    if (roleId && String(roleId).match(/^\d+$/) && guild.roles.cache.has(String(roleId))) {
       permissionOverwrites.push({
         id: String(roleId),
         allow: [

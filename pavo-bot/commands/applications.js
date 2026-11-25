@@ -428,13 +428,14 @@ async function openApplicationTicket(interaction, config, type) {
       return interaction.editReply({ content: `ℹ️ You already have an open **${position.name}** application: <#${existingChannel.id}>` });
     }
 
+    await guild.roles.fetch().catch(() => null);
     const reviewerRoleIds = [...new Set([
       ...getReviewerRoleIds(guild, config, type),
       config.vouchRoleId || '1532384602205851749',
       ...(Array.isArray(config.vouchOnlyRoleIds) ? config.vouchOnlyRoleIds : []),
       '1439210704291762258',
       '1538244553637634118'
-    ].filter(id => id && /^\d+$/.test(String(id))))];
+    ].filter(id => id && /^\d+$/.test(String(id)) && guild.roles.cache.has(String(id))))];
     const memberPerms = [
       PermissionFlagsBits.ViewChannel,
       PermissionFlagsBits.SendMessages,

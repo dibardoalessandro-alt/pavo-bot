@@ -110,18 +110,18 @@
       "staff": true
     },
     "pingRoles": {
-      "content_creator": "Senior Supporter",
-      "beta_tester": "Senior Supporter",
-      "staff": "Management"
+      "content_creator": ["1574896226258919524", "1538244553637634118"],
+      "beta_tester": ["1574896226258919524", "1538244553637634118"],
+      "staff": ["1574896226258919524", "1538244553637634118"]
     },
     "reviewerRoles": {
-      "content_creator": ["Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
-      "beta_tester": ["Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
-      "staff": ["Pavo", "Founder", "Management", "COO"]
+      "content_creator": ["1574896226258919524", "1538244553637634118", "Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
+      "beta_tester": ["1574896226258919524", "1538244553637634118", "Pavo", "Founder", "Management", "COO", "Developer", "Support Trainer", "Senior Supporter"],
+      "staff": ["1574896226258919524", "1538244553637634118", "Pavo", "Founder", "Management", "COO"]
     }
   },
   "legitCheck": {
-    "baseYes": 523,
+    "baseYes": 1233,
     "baseNo": 2
   }
 }

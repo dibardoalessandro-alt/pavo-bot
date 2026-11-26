@@ -673,15 +673,23 @@ async function handleModal(interaction, config) {
 
   const submissionEmbed = buildSubmissionEmbed(position, updated, interaction.user, config, interaction.guild);
 
-  const pingRoleId = resolveRoleId(config.applications?.pingRoles?.[type], config);
-  const validPing = pingRoleId && interaction.guild.roles.cache.has(pingRoleId) ? pingRoleId : null;
+  const rawPing = config.applications?.pingRoles?.[type];
+  const pingList = Array.isArray(rawPing) ? rawPing : (rawPing ? [rawPing] : ['1574896226258919524', '1538244553637634118']);
+  await interaction.guild.roles.fetch().catch(() => null);
+  const validPings = [...new Set(
+    pingList
+      .map(r => resolveRoleId(r, config))
+      .filter(id => id && interaction.guild.roles.cache.has(id))
+  )];
 
   try {
     const summaryMsg = await interaction.channel.send({
-      content: validPing ? `<@&${validPing}> — new **${position.name}** application to review.` : undefined,
+      content: validPings.length > 0
+        ? `${validPings.map(id => `<@&${id}>`).join(' ')} — new **${position.name}** application to review.`
+        : undefined,
       embeds: [submissionEmbed],
       components: [buildReviewRow(false)],
-      allowedMentions: { roles: validPing ? [validPing] : [] }
+      allowedMentions: { roles: validPings }
     });
     updated = await db.updateTicketApplication(interaction.channel.id, { summary_message_id: summaryMsg.id });
   } catch (err) {

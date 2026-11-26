@@ -180,7 +180,6 @@ client.once('ready', async () => {
   // Send or update applications panel if configured
   try {
     await applicationsCmd.sendOrUpdateApplicationPanel(client, config);
-    await applicationsCmd.sendOneTimeStaffAnnouncement(client, config);
   } catch (appPanelErr) {
     console.error('❌ Failed to initialize applications panel:', appPanelErr);
   }

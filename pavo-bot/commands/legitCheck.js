@@ -22,7 +22,7 @@ function buildLegitCheckEmbed(config, guild) {
       `### 🛡️ Community Trust & Transparency\n` +
       `We prioritize customer satisfaction, product stability, and fast support. Every vouch, review, and feedback entry in this server represents genuine customer interaction.\n\n` +
       `**Visual Representation Guide (Examples):**\n` +
-      `• **YES** → ✅ Verified Purchase / Trusted Service (e.g. **YES — 523**)\n` +
+      `• **YES** → ✅ Verified Purchase / Trusted Service (e.g. **YES — 1234**)\n` +
       `• **NO** → ❌ Dissatisfied / Unresolved Issue (e.g. **NO — 2**)\n\n` +
       `────────────────────────────────────────────\n\n` +
       `### Do you trust Pavo Hub / Would you recommend our services?\n` +

@@ -800,12 +800,76 @@ async function execute(interaction, config) {
   return interaction.editReply({ content: '❌ Could not post the application panel. Check `applications.panelChannelId` in config.json and the bot permissions in that channel.' });
 }
 
+// One-time Staff Applications Open announcement in #announcements (guarded by DB so it never duplicates)
+async function sendOneTimeStaffAnnouncement(client, config) {
+  const ANNOUNCE_KEY = 'staff_open_announcement_v1';
+  const existing = await db.getPanelMessage(ANNOUNCE_KEY);
+  if (existing && existing.messageId) return;
+
+  const guildId = '1532173407158800464';
+  const channelId = '1543211883279159376';
+  const applyChannelId = config.applications?.panelChannelId || '1570192629466013737';
+
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    console.warn(`[APPLICATIONS] Announcement channel ${channelId} not found.`);
+    return;
+  }
+
+  try {
+    if (channel.guild?.emojis?.fetch) await channel.guild.emojis.fetch().catch(() => {});
+
+    const staffE = textEmoji('pavo_staff', '🛡️');
+    const creatorE = textEmoji('pavo_creator', '🎬');
+    const rulesE = textEmoji('pavo_rules', '📋');
+    const vouchE = textEmoji('pavo_vouch', '⭐');
+    const iconUrl = channel.guild?.iconURL({ dynamic: true, size: 256 }) || undefined;
+
+    const embed = new EmbedBuilder()
+      .setTitle('📢 Staff Applications Are Now OPEN!')
+      .setColor(brandColor(config))
+      .setDescription(
+        `${staffE} **We have just opened Staff Applications!**\n\n` +
+        `Hurry up and apply now for a chance to join the official **Pavo Staff Team**!\n\n` +
+        `${rulesE} **How to Apply:**\n` +
+        `• Head over to <#${applyChannelId}>\n` +
+        `• Click the **Apply: Staff** button to open your private application ticket\n` +
+        `• Read the requirements carefully and answer every question honestly\n\n` +
+        `${creatorE} *Content Creator applications are also open!*\n\n` +
+        `${vouchE} Good luck to everyone applying — we look forward to reviewing your applications!`
+      )
+      .setThumbnail(iconUrl || null)
+      .setFooter({ text: 'Pavo Team • Official Announcement', iconURL: iconUrl })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('Apply Now')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://discord.com/channels/${guildId}/${applyChannelId}`)
+    );
+
+    const sent = await channel.send({
+      content: `@everyone ${staffE} **We have just opened Staff Applications! Hurry up and apply in <#${applyChannelId}>!**`,
+      embeds: [embed],
+      components: [row],
+      allowedMentions: { parse: ['everyone'] }
+    });
+
+    await db.setPanelMessage(ANNOUNCE_KEY, channel.id, sent.id);
+    console.log(`📢 [APPLICATIONS] Sent one-time Staff Open announcement in #${channel.name} (${sent.id})`);
+  } catch (err) {
+    console.error('[APPLICATIONS] Failed to send Staff Open announcement:', err.message);
+  }
+}
+
 module.exports = {
   data,
   execute,
   handleButton,
   handleModal,
   sendOrUpdateApplicationPanel,
+  sendOneTimeStaffAnnouncement,
   buildControlsRow,
   getStatusText,
   isApplicationChannel,
